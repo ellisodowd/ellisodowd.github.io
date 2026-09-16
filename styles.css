@@ -183,3 +183,66 @@
   .figs { grid-template-columns: 1fr; margin-left: 0; }
   .sec-intro { margin-left: 0; }
 }
+
+/* --- project 1: galleries, offset tables, callouts --- */
+
+.gal { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 30px; margin-left: 46px; max-width: 1180px; }
+.gal figure { margin: 0; display: flex; flex-direction: column; gap: 12px; }
+.gal .plate img { max-height: none; object-fit: contain; }
+.gal figcaption { display: flex; flex-direction: column; gap: 7px; }
+
+.offsets { display: flex; flex-wrap: wrap; gap: 8px; }
+.off {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 13px;
+  line-height: 1;
+  padding: 6px 9px;
+  border: 1px solid var(--card-border);
+  border-radius: 3px;
+  background: #FFFFFF;
+  color: var(--ink-soft);
+  white-space: nowrap;
+}
+.off b { font-weight: 600; }
+.off.g b { color: #2E7D32; }
+.off.r b { color: #B3261E; }
+
+.prose { margin: 0 0 4px 46px; max-width: 700px; font-size: 16px; line-height: 1.7; color: var(--ink-soft); text-wrap: pretty; }
+.prose + .prose { margin-top: -8px; }
+.prose code, .sec-intro code, .fig-note code {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.88em;
+  background: #F1ECE1;
+  padding: 1px 5px;
+  border-radius: 3px;
+}
+.prose ul { padding-left: 20px; margin: 10px 0; }
+.prose li { margin-bottom: 8px; }
+
+.callout {
+  margin-left: 46px;
+  max-width: 760px;
+  background: #FFFFFF;
+  border: 1px solid var(--card-border);
+  border-left: 3px solid var(--gold);
+  padding: 20px 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.callout h4 { margin: 0; font-family: var(--serif); font-size: 18px; font-weight: 600; }
+.callout p { margin: 0; font-size: 15.5px; line-height: 1.65; color: var(--ink-soft); text-wrap: pretty; }
+
+.otable { margin-left: 46px; max-width: 760px; overflow-x: auto; }
+.otable table { border-collapse: collapse; width: 100%; font-size: 15px; }
+.otable th, .otable td { text-align: left; padding: 10px 14px; border-bottom: 1px solid var(--rule); }
+.otable th { font-size: 13px; text-transform: uppercase; letter-spacing: 0.05em; color: var(--ink-faint); font-weight: 600; }
+.otable td { color: var(--ink-soft); }
+.otable td:first-child { color: var(--ink); font-weight: 500; }
+.otable .num { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
+
+@media (max-width: 1000px) { .gal { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (max-width: 900px) {
+  .gal { grid-template-columns: 1fr; margin-left: 0; }
+  .prose, .callout, .otable { margin-left: 0; }
+}

@@ -1,0 +1,350 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Project 1 — Colorizing the Prokudin-Gorskii Photo Collection</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Source+Serif+4:opsz,wght@8..60,400;8..60,600;8..60,700&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
+<link rel="stylesheet" href="../styles.css">
+</head>
+<body>
+
+<header class="topbar">
+  <div class="brand">
+    <span class="brand-name">Ellis O'Dowd</span>
+    <span class="brand-course">CS 180 · Fall 2026</span>
+  </div>
+  <nav class="topnav">
+    <a href="../index.html">Projects</a>
+    <a href="https://github.com/ellisodowd/ellisodowd.github.io">GitHub</a>
+  </nav>
+</header>
+
+<div class="page-head">
+  <a class="backlink" href="../index.html">
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M19 12H5"></path><path d="M11 18l-6-6 6-6"></path></svg>
+    All projects
+  </a>
+  <div class="page-title">
+    <span class="page-kicker">Project 1</span>
+    <h1>Colorizing the Prokudin-Gorskii Photo Collection</h1>
+    <p>Reassembling Sergei Prokudin-Gorskii's glass-plate negatives into color images, automatically.</p>
+  </div>
+</div>
+
+<main>
+
+  <section class="writeup">
+    <div class="sec-head">
+      <span class="sec-num">1</span>
+      <h2>A camera that took three pictures at once</h2>
+    </div>
+    <p class="prose">In 1907 Prokudin-Gorskii set out to photograph the Russian Empire in color.
+       There was just one issue: this was decades before the invention of color film.
+        Prokudin-Gorskii the idea to shoot each scene three times. Once with a red filter, once with green, and once with blue. All of these were recorded onto a single glass plate. The scanned negatives are availible online <a src="https://www.loc.gov/collections/prokudin-gorskii/?st=grid">here</a>. </p>
+    <p class="prose">Constructing these negatives into a full-color image seems trivial. Split the plate into even thirds making channels of blue, green and red (top to bottom).
+      Stacking these channels should should reveal the photograph. It does not.
+        In order to take the photos, the plates and filters had to be changed, which causes some movement of the camera. Not to mention, scenes are live, trees can sway in the wind, people can move around. The naieve approach of stacking the channels leads to poor images.
+         So the challenge of this project comes down to 2 numbers for green and red:
+           the <code>(x, y)</code> shift that aligns them with blue, which stays fixed as the reference.</p>
+    <div class="figs">
+      <figure>
+        <div class="plate"><img src="./images/web/naive.jpg" alt="Harvesters with the three channels stacked at zero offset" loading="lazy"></div>
+        <figcaption>
+          <span class="fig-label">Channels stacked as-is</span>
+          <div class="offsets"><span class="off"><b>offset</b> &nbsp;(0, 0)</span></div>
+          <span class="fig-note">Split the plate into thirds, stack them. I refer to this as the naive approach.</span>
+        </figcaption>
+      </figure>
+      <figure>
+        <div class="plate"><img src="./images/web/harvesters.jpg" alt="Harvesters, aligned color reconstruction" loading="lazy"></div>
+        <figcaption>
+          <span class="fig-label">After the search</span>
+          <div class="offsets"><span class="off g"><b>G</b> &nbsp;(x&nbsp;17, y&nbsp;60)</span><span class="off r"><b>R</b> &nbsp;(x&nbsp;14, y&nbsp;124)</span></div>
+          <span class="fig-note">Two shifts that were found automatically. Red was 124 pixels above blue.</span>
+        </figcaption>
+      </figure>
+    </div>
+  </section>
+
+  <section class="writeup">
+    <div class="sec-head">
+      <span class="sec-num">2</span>
+      <h2>Scoring an alignment: L2 and NCC</h2>
+    </div>
+    <p class="prose">To search for an offset I first need to answer a smaller question: given a candidate shift, how good is it? Two metrics, both computed over the two channels as flat vectors:</p>
+    <p class="prose"><strong>L2 / sum of squared differences.</strong> <code>sum((A - B)**2)</code>, and lower is better. It asks how close the two channels are pixel for pixel. This is cheap, easy, and works well when the two channels have similar brightness.</p>
+    <p class="prose"><strong>Normalized cross-correlation.</strong> Normalize each channel to zero mean and unit norm, then take the dot product; higher is better. Since the mean is subtracted and the vector is rescaled, NCC measures whether the two channels have the same structure (edges and texture in the same places, regardless of brightness differences)
+       This is vital when comparing channels, since each filter allows different amounts of light. In light of this fact, I did not bother with L2 as my evaluation metric.</p>
+    <div class="callout">
+      <h4>Advice: crop before you score</h4>
+      <p>Every plate has junk at the edges, which can cause probems since the shift is implemented with <code>np.roll</code>, which is circular.
+        This causes the junk from the bottom to be added to the top, which can give you worse scores than you should have.
+        To combat this, I cropped 10% of each image before evaluationg, which got rid of the majority of noise and artifacts from the medium of photography.
+        This led to much better results.
+    </div>
+  </section>
+
+  <section class="writeup">
+    <div class="sec-head">
+      <span class="sec-num">3</span>
+      <h2>Single-scale</h2>
+    </div>
+    <p class="prose">On the small JPEGs the simple approach suffices. I take every candidate displacement in a window of ±50 pixels in each direction, apply it, score the cropped overlap with NCC, and keep the winner.
+       That is 101 × 101, which comes out to 10,200 candidate shifts per channel, and each one must be scored. This is permissible when the image is 390&nbsp;×&nbsp;341.</p>
+    <div class="gal">
+      <figure>
+        <div class="plate"><img src="./images/web/cathedral.jpg" alt="Aligned color reconstruction of Cathedral" loading="lazy"></div>
+        <figcaption>
+          <span class="fig-label">Cathedral</span>
+          <div class="offsets"><span class="off g"><b>G</b> &nbsp;(x&nbsp;2, y&nbsp;5)</span><span class="off r"><b>R</b> &nbsp;(x&nbsp;3, y&nbsp;12)</span></div>
+          <span class="fig-note">Exhaustive ±50px search · 4.13s</span>
+        </figcaption>
+      </figure>
+      <figure>
+        <div class="plate"><img src="./images/web/monastery.jpg" alt="Aligned color reconstruction of Monastery" loading="lazy"></div>
+        <figcaption>
+          <span class="fig-label">Monastery</span>
+          <div class="offsets"><span class="off g"><b>G</b> &nbsp;(x&nbsp;2, y&nbsp;-3)</span><span class="off r"><b>R</b> &nbsp;(x&nbsp;2, y&nbsp;3)</span></div>
+          <span class="fig-note">Exhaustive ±50px search · 4.09s</span>
+        </figcaption>
+      </figure>
+      <figure>
+        <div class="plate"><img src="./images/web/tobolsk.jpg" alt="Aligned color reconstruction of Tobolsk" loading="lazy"></div>
+        <figcaption>
+          <span class="fig-label">Tobolsk</span>
+          <div class="offsets"><span class="off g"><b>G</b> &nbsp;(x&nbsp;3, y&nbsp;3)</span><span class="off r"><b>R</b> &nbsp;(x&nbsp;3, y&nbsp;6)</span></div>
+          <span class="fig-note">Exhaustive ±50px search · 4.16s</span>
+        </figcaption>
+      </figure>
+    </div>
+  </section>
+
+  <section class="writeup">
+    <div class="sec-head">
+      <span class="sec-num">4</span>
+      <h2>Pyramid: Solution to scaling</h2>
+    </div>
+    <p class="prose">The full-resolution plates are around 3500 pixels wide, roughly 80&nbsp;× the pixel count of the JPEGs, and their displacements are orders of magnitude larger. Exhaustive search suffers in 2 directions: the search window has to grow to ±200 or so, which is about 160,000 candidates instead of 10,200, and each candidate now scores 80&nbsp;× as many pixels. That product is the difference between four seconds and tens of minutes (and sometimes more). I have a 10-minute run of one melons alignment to prove the point.</p>
+    <p class="prose">A coarse-to-fine image pyramid removes almost all of that work. Repeatedly downsample the image by half until it is much smaller; a 180-pixel displacement at full resolution is a 5-pixel displacement five levels down. My algorithm:</p>
+    <p class="prose"><strong>Base case</strong>: This case is hit at the coarsest level, where it runs the full exhaustive search. The image is about 110 pixels wide, so even a wide window is nearly free.<br>
+    <strong>Recursive case</strong>: take the offset found one level coarser, double it (this works since the image just doubled in size), apply it, and search only a small (±2) window around it for a residual correction.
+     Each level refines the estimate by one pixel of precision at that level's scale.</p>
+
+    <div class="gal">
+      <figure>
+        <div class="plate"><img src="./images/web/blur_none.jpg" alt="Cathedral, no blur" loading="lazy"></div>
+        <figcaption><span class="fig-label">No blur</span><span class="fig-note">The aligned cathedral at full detail.</span></figcaption>
+      </figure>
+      <figure>
+        <div class="plate"><img src="./images/web/blur_small.jpg" alt="Cathedral, small Gaussian kernel" loading="lazy"></div>
+        <figcaption><span class="fig-label">Small kernel</span><span class="fig-note">A gentle pre-filter. This is just enough to kill the frequencies that would alias on the next halving.</span></figcaption>
+      </figure>
+      <figure>
+        <div class="plate"><img src="./images/web/blur_big.jpg" alt="Cathedral, large Gaussian kernel" loading="lazy"></div>
+        <figcaption><span class="fig-label">Large kernel</span><span class="fig-note">Far more blur than antialiasing needs. Structure survives, which is why alignment still works on heavily blurred coarse levels.</span></figcaption>
+      </figure>
+    </div>
+    </div>
+  </section>
+
+  <section class="writeup">
+    <div class="sec-head">
+      <span class="sec-num">5</span>
+      <h2>Results: the provided plates</h2>
+    </div>
+    <p class="sec-intro">All offsets are the displacement applied to that channel to register it onto blue, given as (x, y). Blue is the fixed reference, so its offset will always be (0, 0), by construction.</p>
+    <div class="gal">
+      <figure>
+        <div class="plate"><img src="./images/web/harvesters.jpg" alt="Aligned color reconstruction of Harvesters" loading="lazy"></div>
+        <figcaption>
+          <span class="fig-label">Harvesters</span>
+          <div class="offsets"><span class="off g"><b>G</b> &nbsp;(x&nbsp;17, y&nbsp;60)</span><span class="off r"><b>R</b> &nbsp;(x&nbsp;14, y&nbsp;124)</span></div>
+          <span class="fig-note">5 pyramid levels · 5.35s</span>
+        </figcaption>
+      </figure>
+      <figure>
+        <div class="plate"><img src="./images/web/church.jpg" alt="Aligned color reconstruction of Church" loading="lazy"></div>
+        <figcaption>
+          <span class="fig-label">Church</span>
+          <div class="offsets"><span class="off g"><b>G</b> &nbsp;(x&nbsp;4, y&nbsp;25)</span><span class="off r"><b>R</b> &nbsp;(x&nbsp;-4, y&nbsp;58)</span></div>
+          <span class="fig-note">5 pyramid levels · 4.52s</span>
+        </figcaption>
+      </figure>
+      <figure>
+        <div class="plate"><img src="./images/web/emir.jpg" alt="Aligned color reconstruction of Emir of Bukhara" loading="lazy"></div>
+        <figcaption>
+          <span class="fig-label">Emir of Bukhara</span>
+          <div class="offsets"><span class="off g"><b>G</b> &nbsp;(x&nbsp;24, y&nbsp;49)</span><span class="off r"><b>R</b> &nbsp;(x&nbsp;56, y&nbsp;102)</span></div>
+          <span class="fig-note">2 pyramid levels · 16.64s</span>
+        </figcaption>
+      </figure>
+      <figure>
+        <div class="plate"><img src="./images/web/icon.jpg" alt="Aligned color reconstruction of Icon" loading="lazy"></div>
+        <figcaption>
+          <span class="fig-label">Icon</span>
+          <div class="offsets"><span class="off g"><b>G</b> &nbsp;(x&nbsp;17, y&nbsp;41)</span><span class="off r"><b>R</b> &nbsp;(x&nbsp;23, y&nbsp;90)</span></div>
+          <span class="fig-note">5 pyramid levels · 4.86s</span>
+        </figcaption>
+      </figure>
+      <figure>
+        <div class="plate"><img src="./images/web/ilemselga.jpg" alt="Aligned color reconstruction of Ilemselga" loading="lazy"></div>
+        <figcaption>
+          <span class="fig-label">Ilemselga</span>
+          <div class="offsets"><span class="off g"><b>G</b> &nbsp;(x&nbsp;7, y&nbsp;40)</span><span class="off r"><b>R</b> &nbsp;(x&nbsp;11, y&nbsp;130)</span></div>
+          <span class="fig-note">5 pyramid levels · 4.71s</span>
+        </figcaption>
+      </figure>
+      <figure>
+        <div class="plate"><img src="./images/web/melons.jpg" alt="Aligned color reconstruction of Melons" loading="lazy"></div>
+        <figcaption>
+          <span class="fig-label">Melons</span>
+          <div class="offsets"><span class="off g"><b>G</b> &nbsp;(x&nbsp;10, y&nbsp;82)</span><span class="off r"><b>R</b> &nbsp;(x&nbsp;14, y&nbsp;178)</span></div>
+          <span class="fig-note">5 pyramid levels · 4.41s</span>
+        </figcaption>
+      </figure>
+      <figure>
+        <div class="plate"><img src="./images/web/religous_painting.jpg" alt="Aligned color reconstruction of Religious Painting" loading="lazy"></div>
+        <figcaption>
+          <span class="fig-label">Religious Painting</span>
+          <div class="offsets"><span class="off g"><b>G</b> &nbsp;(x&nbsp;3, y&nbsp;28)</span><span class="off r"><b>R</b> &nbsp;(x&nbsp;7, y&nbsp;68)</span></div>
+          <span class="fig-note">5 pyramid levels · 4.19s</span>
+        </figcaption>
+      </figure>
+      <figure>
+        <div class="plate"><img src="./images/web/self_portrait.jpg" alt="Aligned color reconstruction of Self Portrait" loading="lazy"></div>
+        <figcaption>
+          <span class="fig-label">Self Portrait</span>
+          <div class="offsets"><span class="off g"><b>G</b> &nbsp;(x&nbsp;30, y&nbsp;80)</span><span class="off r"><b>R</b> &nbsp;(x&nbsp;37, y&nbsp;176)</span></div>
+          <span class="fig-note">5 pyramid levels · 5.08s</span>
+        </figcaption>
+      </figure>
+      <figure>
+        <div class="plate"><img src="./images/web/siren.jpg" alt="Aligned color reconstruction of Siren (Lilacs)" loading="lazy"></div>
+        <figcaption>
+          <span class="fig-label">Siren (Lilacs)</span>
+          <div class="offsets"><span class="off g"><b>G</b> &nbsp;(x&nbsp;-6, y&nbsp;49)</span><span class="off r"><b>R</b> &nbsp;(x&nbsp;-24, y&nbsp;96)</span></div>
+          <span class="fig-note">5 pyramid levels · 4.64s</span>
+        </figcaption>
+      </figure>
+      <figure>
+        <div class="plate"><img src="./images/web/three_generations.jpg" alt="Aligned color reconstruction of Three Generations" loading="lazy"></div>
+        <figcaption>
+          <span class="fig-label">Three Generations</span>
+          <div class="offsets"><span class="off g"><b>G</b> &nbsp;(x&nbsp;14, y&nbsp;53)</span><span class="off r"><b>R</b> &nbsp;(x&nbsp;11, y&nbsp;112)</span></div>
+          <span class="fig-note">5 pyramid levels · 4.43s</span>
+        </figcaption>
+      </figure>
+      <figure>
+        <div class="plate"><img src="./images/web/wharf.jpg" alt="Aligned color reconstruction of Wharf" loading="lazy"></div>
+        <figcaption>
+          <span class="fig-label">Wharf</span>
+          <div class="offsets"><span class="off g"><b>G</b> &nbsp;(x&nbsp;-7, y&nbsp;15)</span><span class="off r"><b>R</b> &nbsp;(x&nbsp;-16, y&nbsp;83)</span></div>
+          <span class="fig-note">5 pyramid levels · 4.82s</span>
+        </figcaption>
+      </figure>
+    </div>
+  </section>
+
+  <section class="writeup">
+    <div class="sec-head">
+      <span class="sec-num">6</span>
+      <h2>Results: my own picks from the collection</h2>
+    </div>
+    <p class="sec-intro">Three more plates pulled from the Library of Congress collection and run through the same pyramid.</p>
+    <div class="gal">
+      <figure>
+        <div class="plate"><img src="./images/web/boy.jpg" alt="Aligned color reconstruction of Boy on the Embankment" loading="lazy"></div>
+        <figcaption>
+          <span class="fig-label">Boy on the Embankment</span>
+          <div class="offsets"><span class="off g"><b>G</b> &nbsp;(x&nbsp;-16, y&nbsp;40)</span><span class="off r"><b>R</b> &nbsp;(x&nbsp;-11, y&nbsp;104)</span></div>
+          <span class="fig-note">5 pyramid levels · 5.26s</span>
+        </figcaption>
+      </figure>
+      <figure>
+        <div class="plate"><img src="./images/web/mosque.jpg" alt="Aligned color reconstruction of Mosque Ruin" loading="lazy"></div>
+        <figcaption>
+          <span class="fig-label">Mosque Ruin</span>
+          <div class="offsets"><span class="off g"><b>G</b> &nbsp;(x&nbsp;10, y&nbsp;26)</span><span class="off r"><b>R</b> &nbsp;(x&nbsp;11, y&nbsp;70)</span></div>
+          <span class="fig-note">5 pyramid levels · 4.31s</span>
+        </figcaption>
+      </figure>
+      <figure>
+        <div class="plate"><img src="./images/web/statue.jpg" alt="Aligned color reconstruction of Statue" loading="lazy"></div>
+        <figcaption>
+          <span class="fig-label">Statue</span>
+          <div class="offsets"><span class="off g"><b>G</b> &nbsp;(x&nbsp;-11, y&nbsp;33)</span><span class="off r"><b>R</b> &nbsp;(x&nbsp;-27, y&nbsp;140)</span></div>
+          <span class="fig-note">5 pyramid levels · 4.72s</span>
+        </figcaption>
+      </figure>
+    </div>
+  </section>
+
+  <section class="writeup">
+    <div class="sec-head">
+      <span class="sec-num">7</span>
+      <h2>Where I struggled</h2>
+    </div>
+    <p class="prose">Emir is the standard hard case, and it caused problems in my pipeline. At 5 pyramid levels the search locks onto a badly wrong offset for red and the reconstruction comes out as a ghost. A second, red Emir is visible.</p>
+    <p class="prose">I believe this is caused by brightness, as he is rather still. The Emir's robe is a saturated blue: it is very bright in the blue channel and nearly black in the red one. At the coarsest pyramid level, where the whole robe is a handful of pixels, there is little structure left between the two channels for the metric to latch onto.</p>
+    <p class="prose">My solution was to run this with 2 levels instead of 5. The coarsest level is then large enough to still contain real edge structure, and NCC finds the true offset. The cost is speed: 16.6 seconds instead of 4.6, because the exhaustive base-case search now runs on a much bigger image.</p>
+    <div class="gal">
+      <figure>
+        <div class="plate"><img src="./images/web/emir_fail.jpg" alt="Emir of Bukhara, misaligned at 5 pyramid levels" loading="lazy"></div>
+        <figcaption>
+          <span class="fig-label">Failure — 5 levels</span>
+          <div class="offsets"><span class="off r"><b>R</b> &nbsp;badly wrong</span></div>
+          <span class="fig-note">Red lands roughly a body-width off. The coarse level had no structure to match, only a brightness gap.</span>
+        </figcaption>
+      </figure>
+      <figure>
+        <div class="plate"><img src="./images/web/emir.jpg" alt="Emir of Bukhara, correctly aligned at 2 pyramid levels" loading="lazy"></div>
+        <figcaption>
+          <span class="fig-label">Fixed — 2 levels</span>
+          <div class="offsets"><span class="off g"><b>G</b> &nbsp;(x&nbsp;24, y&nbsp;49)</span><span class="off r"><b>R</b> &nbsp;(x&nbsp;56, y&nbsp;102)</span></div>
+          <span class="fig-note">Coarsest level is large enough to retain real edges. 16.64s.</span>
+        </figcaption>
+      </figure>
+    </div>
+  </section>
+
+  <section class="writeup">
+    <div class="sec-head">
+      <span class="sec-num">8</span>
+      <h2>All offsets</h2>
+    </div>
+    <p class="sec-intro">Every multi-scale result in one place. Cathedral, Monastery, and Tobolsk are the low-resolution JPEGs and appear in the single-scale section above.</p>
+    <div class="otable">
+      <table>
+        <thead><tr><th>Image</th><th>Green (x, y)</th><th>Red (x, y)</th><th>Levels</th><th>Time</th></tr></thead>
+        <tbody>
+<tr><td>Harvesters</td><td class="num">(17, 60)</td><td class="num">(14, 124)</td><td class="num">5</td><td class="num">5.35s</td></tr>
+<tr><td>Church</td><td class="num">(4, 25)</td><td class="num">(-4, 58)</td><td class="num">5</td><td class="num">4.52s</td></tr>
+<tr><td>Emir of Bukhara</td><td class="num">(24, 49)</td><td class="num">(56, 102)</td><td class="num">2</td><td class="num">16.64s</td></tr>
+<tr><td>Icon</td><td class="num">(17, 41)</td><td class="num">(23, 90)</td><td class="num">5</td><td class="num">4.86s</td></tr>
+<tr><td>Ilemselga</td><td class="num">(7, 40)</td><td class="num">(11, 130)</td><td class="num">5</td><td class="num">4.71s</td></tr>
+<tr><td>Melons</td><td class="num">(10, 82)</td><td class="num">(14, 178)</td><td class="num">5</td><td class="num">4.41s</td></tr>
+<tr><td>Religious Painting</td><td class="num">(3, 28)</td><td class="num">(7, 68)</td><td class="num">5</td><td class="num">4.19s</td></tr>
+<tr><td>Self Portrait</td><td class="num">(30, 80)</td><td class="num">(37, 176)</td><td class="num">5</td><td class="num">5.08s</td></tr>
+<tr><td>Siren (Lilacs)</td><td class="num">(-6, 49)</td><td class="num">(-24, 96)</td><td class="num">5</td><td class="num">4.64s</td></tr>
+<tr><td>Three Generations</td><td class="num">(14, 53)</td><td class="num">(11, 112)</td><td class="num">5</td><td class="num">4.43s</td></tr>
+<tr><td>Wharf</td><td class="num">(-7, 15)</td><td class="num">(-16, 83)</td><td class="num">5</td><td class="num">4.82s</td></tr>
+<tr><td>Boy on the Embankment</td><td class="num">(-16, 40)</td><td class="num">(-11, 104)</td><td class="num">5</td><td class="num">5.26s</td></tr>
+<tr><td>Mosque Ruin</td><td class="num">(10, 26)</td><td class="num">(11, 70)</td><td class="num">5</td><td class="num">4.31s</td></tr>
+<tr><td>Statue</td><td class="num">(-11, 33)</td><td class="num">(-27, 140)</td><td class="num">5</td><td class="num">4.72s</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+</main>
+
+<footer class="sitefoot">
+  <span>© 2026 Ellis O'Dowd</span>
+  <span>UC Berkeley CS180</span>
+</footer>
+
+</body>
+</html>
