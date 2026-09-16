@@ -188,7 +188,7 @@
 
 .gal { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 30px; margin-left: 46px; max-width: 1180px; }
 .gal figure { margin: 0; display: flex; flex-direction: column; gap: 12px; }
-.gal .plate img { max-height: none; object-fit: contain; }
+.gal .plate img { max-height: 260px; object-fit: contain; }
 .gal figcaption { display: flex; flex-direction: column; gap: 7px; }
 
 .offsets { display: flex; flex-wrap: wrap; gap: 8px; }
