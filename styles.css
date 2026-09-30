@@ -246,3 +246,138 @@
   .gal { grid-template-columns: 1fr; margin-left: 0; }
   .prose, .callout, .otable { margin-left: 0; }
 }
+
+/* --- subsections, stacks, code blocks --- */
+
+.subsec { margin-left: 46px; margin-top: 20px; max-width: 1040px; display: flex; flex-direction: column; gap: 18px; }
+.subsec h3 {
+  margin: 20px 0 0;
+  font-family: var(--serif);
+  font-size: 23px;
+  font-weight: 600;
+  letter-spacing: -0.012em;
+  padding-bottom: 10px;
+  border-bottom: 1px solid var(--rule);
+}
+.sub-intro { margin: 0; max-width: 700px; font-size: 16px; line-height: 1.7; color: var(--ink-soft); text-wrap: pretty; }
+.subsub { margin: 14px 0 -4px; font-family: var(--serif); font-size: 18px; font-weight: 600; color: var(--ink); }
+.tag {
+  margin-left: 8px;
+  font-family: var(--sans);
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--gold-dark);
+  border: 1px solid var(--gold);
+  border-radius: 3px;
+  padding: 2px 7px;
+  vertical-align: middle;
+}
+
+.subsec .figs { margin-left: 0; }
+.figs.stack { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 20px; max-width: 900px; }
+.figs.stack .plate img { max-height: 260px; }
+
+.plate.empty {
+  align-items: center;
+  justify-content: center;
+  min-height: 200px;
+  padding: 20px;
+  border-style: dashed;
+  border-color: #D6CDBD;
+  background: #F5F1E8;
+  color: #9A907E;
+  font-size: 13px;
+  text-align: center;
+  line-height: 1.5;
+}
+
+.code-block { margin: 0; display: flex; flex-direction: column; gap: 8px; max-width: 900px; }
+.code-label { font-size: 14px; font-weight: 600; color: var(--gold-dark); }
+.code-block pre {
+  margin: 0;
+  padding: 18px 20px;
+  background: var(--navy-dark);
+  border-radius: 4px;
+  overflow-x: auto;
+}
+.code-block code {
+  font-family: "IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 13.5px;
+  line-height: 1.6;
+  color: #DCE6EF;
+  white-space: pre;
+}
+
+@media (max-width: 900px) {
+  .subsec { margin-left: 0; }
+  .figs.stack { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+
+/* --- syntax highlighting (highlight.js tokens, site palette) --- */
+
+.hljs-keyword,
+.hljs-built_in { color: #F2B84B; }
+.hljs-string,
+.hljs-meta .hljs-string { color: #9FD4A3; }
+.hljs-number,
+.hljs-literal { color: #E8A0A0; }
+.hljs-title,
+.hljs-title.function_,
+.hljs-title.class_ { color: #8FC5EE; }
+.hljs-params { color: #DCE6EF; }
+.hljs-comment { color: #7C8FA3; font-style: italic; }
+.hljs-attr,
+.hljs-property { color: #C9B6E8; }
+.hljs-punctuation,
+.hljs-operator { color: #B8C6D4; }
+
+/* --- numbered step lists, inline code --- */
+
+.steps { margin: 0; padding-left: 22px; max-width: 700px; display: flex; flex-direction: column; gap: 10px; }
+.steps li { font-size: 16px; line-height: 1.7; color: var(--ink-soft); text-wrap: pretty; }
+.steps li::marker { color: var(--gold-dark); font-weight: 600; }
+code.inline {
+  font-family: "IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.9em;
+  background: #F0EADF;
+  border: 1px solid var(--card-border);
+  border-radius: 3px;
+  padding: 1px 5px;
+  color: #4A4338;
+}
+
+/* --- data tables --- */
+
+.numbers {
+  border-collapse: collapse;
+  max-width: 620px;
+  width: 100%;
+  font-size: 15px;
+  background: #FFFFFF;
+  border: 1px solid var(--card-border);
+}
+.numbers th,
+.numbers td { padding: 10px 16px; text-align: left; border-bottom: 1px solid var(--card-border); }
+.numbers th { font-size: 14px; font-weight: 600; color: var(--navy); background: #F5F1E8; }
+.numbers td { color: var(--ink-soft); }
+.numbers td:first-child { color: var(--ink); }
+.numbers th:not(:first-child),
+.numbers td:not(:first-child) { text-align: right; font-variant-numeric: tabular-nums; }
+.numbers tbody tr:last-child td { border-bottom: none; }
+
+/* --- hybrid image scale ladder --- */
+
+.scale-figure { margin: 0; display: flex; flex-direction: column; gap: 14px; max-width: 1040px; }
+.scale-row {
+  display: flex;
+  align-items: flex-end;
+  gap: 28px;
+  padding: 20px;
+  background: #FFFFFF;
+  border: 1px solid var(--card-border);
+}
+.scale-row img { display: block; height: auto; image-rendering: auto; }
+.scale-figure figcaption { display: flex; flex-direction: column; gap: 5px; }
+
+.wide-figure { margin: 0; display: flex; flex-direction: column; gap: 14px; max-width: 1040px; }
+.wide-figure figcaption { display: flex; flex-direction: column; gap: 5px; }

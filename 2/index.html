@@ -1,0 +1,669 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Project 2 — Fun with Filters and Frequencies</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Source+Serif+4:opsz,wght@8..60,400;8..60,600;8..60,700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<link rel="stylesheet" href="../styles.css">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/languages/python.min.js"></script>
+<script>document.addEventListener('DOMContentLoaded',function(){if(window.hljs)hljs.highlightAll();});</script>
+</head>
+<body>
+
+<header class="topbar">
+  <div class="brand">
+    <span class="brand-name">Ellis O'Dowd</span>
+    <span class="brand-course">CS 180 · Fall 2026</span>
+  </div>
+  <nav class="topnav">
+    <a href="../index.html">Projects</a>
+    <a href="https://github.com/ellisodowd">GitHub</a>
+  </nav>
+</header>
+
+<div class="page-head">
+  <a class="backlink" href="../index.html">
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M19 12H5"></path><path d="M11 18l-6-6 6-6"></path></svg>
+    All projects
+  </a>
+  <div class="page-title">
+    <span class="page-kicker">Project 2</span>
+    <h1>Now You See it, Now You Don't!</h1>
+    <p>Manipulating image frequencies</p>
+  </div>
+</div>
+
+<main>
+
+  <!-- ======================= PART 1 ======================= -->
+
+  <section class="writeup">
+    <div class="sec-head">
+      <span class="sec-num">1</span>
+      <h2>Fun with Filters</h2>
+    </div>
+    <!-- ---------- 1.1 ---------- -->
+    <div class="subsec">
+      <h3>1.1 &nbsp;Convolutions from Scratch</h3>
+      <p class="sub-intro">We can implement convolutions using for loops. It can be done with 4 for loops, and then more efficiently with 2 for loops. They both however, have the same setup steps:</p>
+
+      <ol class="steps">
+        <li>Pad the input with zeros so the output is the same size as the input. The filter is centered on each pixel, so the padding is <code class="inline">(filter_x - 1) // 2</code> before and <code class="inline">filter_x // 2</code> after — split this way so even-sized filters still work.</li>
+        <li>Allocate the output array at the original image size.</li>
+        <li>Flip the filter with <code class="inline">np.flip</code>. This changes the operation from correlation, to convolution</li>
+      </ol>
+
+      <p class="sub-intro">From this point, this is how they differ:</p>
+
+      <p class="sub-intro">The 4 loop implementation iterates over each row and column in the image A, which yeilds us each pixel. Then with each pixel, we iterate over each row and column of our filter, which applies each pixel of our filter to its corresponding section in the source image.</p>
+
+      <figure class="code-block">
+        <figcaption class="code-label">Four-loop convolution</figcaption>
+        <pre><code class="language-python">def convolve_4loop(A: np.ndarray, filter: np.ndarray):
+    x, y = A.shape
+    filter_x, filter_y = filter.shape
+
+    pad_x_before, pad_x_after = (filter_x - 1) // 2, filter_x // 2
+    pad_y_before, pad_y_after = (filter_y - 1) // 2, filter_y // 2
+
+    # zero-fill padding, &quot;same&quot; output size
+    A = np.pad(A, pad_width=((pad_x_before, pad_x_after),
+                             (pad_y_before, pad_y_after)), mode=&#x27;constant&#x27;)
+
+    out_matrix = np.zeros((x, y))
+    # flip so it&#x27;s convolution, not correlation
+    filter = np.flip(filter)
+
+    for i in range(x):
+        for j in range(y):
+            element = 0
+            for f_i in range(filter_x):
+                for f_j in range(filter_y):
+                    element += A[i + f_i, j + f_j] * filter[f_i, f_j]
+            out_matrix[i, j] = element
+    return out_matrix</code></pre>
+      </figure>
+
+      <p class="sub-intro">The two loop implementation takes advantage of numpy's vectorization. instead of iterating over the filter sequentially, it can apply the filter in just one operation.</p>
+
+      <figure class="code-block">
+        <figcaption class="code-label">Two-loop convolution</figcaption>
+        <pre><code class="language-python">def convolve_2loop(A: np.ndarray, filter: np.ndarray):
+    x, y = A.shape
+    filter_x, filter_y = filter.shape
+
+    pad_x_before, pad_x_after = (filter_x - 1) // 2, filter_x // 2
+    pad_y_before, pad_y_after = (filter_y - 1) // 2, filter_y // 2
+
+    # zero-fill padding, &quot;same&quot; output size
+    A = np.pad(A, pad_width=((pad_x_before, pad_x_after),
+                             (pad_y_before, pad_y_after)), mode=&#x27;constant&#x27;)
+
+    out_matrix = np.zeros((x, y))
+    # flip so it&#x27;s convolution, not correlation
+    filter = np.flip(filter)
+
+    for i in range(x):
+        for j in range(y):
+            # inner two loops replaced by a vectorized window multiply
+            out_matrix[i, j] = np.sum(filter * A[i:i + filter_x, j:j + filter_y])
+    return out_matrix</code></pre>
+      </figure>
+
+      <h4 class="subsub">Runtime</h4>
+      <p class="sub-intro">All three run on the same 1206×1335 grayscale image with the same 9×9 box filter.</p>
+
+      <table class="numbers">
+        <thead>
+          <tr><th>Implementation</th><th>Time (s)</th><th>Relative to scipy</th></tr>
+        </thead>
+        <tbody>
+          <tr><td>4 loops</td><td>19.784</td><td>180×</td></tr>
+          <tr><td>2 loops</td><td>2.887</td><td>26×</td></tr>
+          <tr><td><code class="inline">scipy.signal.convolve2d</code></td><td>0.110</td><td>1×</td></tr>
+        </tbody>
+      </table>
+
+      <p class="sub-intro">What is the reason for this loop discrepancy? The 4 loop iteration requires <code class="inline">Image_Height * Image_Width * Filter_Height * Filter_Width</code> operations, and every one of them runs in Python. With the 2 loop version, it keeps the first half of that equation, but the filter is applied as a single operation, so only <code class="inline">Image_Height * Image_Width</code> steps happen in Python and the rest are handed to numpy to run in C. Scipy is even faster still because it does not run any of those iterations in Python: the whole nested loop lives in compiled C, so it avoids the per-step interpreter overhead that even the 2 loop version pays once per pixel.</p>
+
+      <h4 class="subsub">Boundary handling</h4>
+      <p class="sub-intro">I chose the same output size with zero padded boundaries. The benefits of this approach are its simplicity to implement, as well as preserving the dimensions of the image. A drawback, however, is that the edges become darkened, as you can see in the output images. Scipy does the same thing by default, since <code class="inline">convolve2d</code> uses <code class="inline">boundary='fill'</code> with a fill value of 0, so our outputs line up. It also offers <code class="inline">'symm'</code> and <code class="inline">'wrap'</code>, which mirror or tile the image instead of filling it with black, but I did not implement those.</p>
+
+      <div class="figs">
+        <figure>
+          <div class="plate"><img src="./images/ellis.jpg" alt="Grayscale selfie used as the convolution test image"></div>
+          <figcaption>
+            <span class="fig-label">Original</span>
+            <span class="fig-note">Me, with the hat I got at the Cal vs Wagner football game.</span>
+          </figcaption>
+        </figure>
+        <figure>
+          <div class="plate"><img src="./images/9box.jpg" alt="Selfie convolved with a 9x9 box filter"></div>
+          <figcaption>
+            <span class="fig-label">9×9 box filter</span>
+            <span class="fig-note">Me, with the same hat, with a 9x9 box filter blur.</span>
+          </figcaption>
+        </figure>
+        <figure>
+          <div class="plate"><img src="./images/ellis_dx.jpg" alt="Selfie convolved with the finite difference operator D_x"></div>
+          <figcaption>
+            <span class="fig-label">D<sub>x</sub></span>
+            <span class="fig-note">Yet the same hat again, with my vertical edges shown.</span>
+          </figcaption>
+        </figure>
+        <figure>
+          <div class="plate"><img src="./images/ellis_dy.jpg" alt="Selfie convolved with the finite difference operator D_y"></div>
+          <figcaption>
+            <span class="fig-label">D<sub>y</sub></span>
+            <span class="fig-note">The hat has returned, and you can see my horizontal edges. Easiest to tell with the plaque in the top left.</span>
+          </figcaption>
+        </figure>
+      </div>
+    </div>
+
+    <!-- ---------- 1.2 ---------- -->
+    <div class="subsec">
+      <h3>1.2 &nbsp;Finite Difference Operator</h3>
+      <p class="sub-intro">By taking partial derivatives in a direction, we can detect vertical and horizontal edges in an image. By taking the gradient, we can get edges in both directions.</p>
+
+      <p class="sub-intro">However, since the image has discrete pixel values, it is not continuous and therefore not a differentiable function. To get around this, we can approximate the derivative using the finite difference operator. We can get the difference between the pixel we are targeting, and the one next to it, and the result should be a pretty good approximation. This is done in the code below.</p>
+
+      <figure class="code-block">
+        <figcaption class="code-label">Partial derivatives, gradient magnitude, and binarization</figcaption>
+        <pre><code class="language-python">dx = np.array([[1, -1]])
+dx_image = apply_filter_to_image(&quot;./images/cameraman.png&quot;, dx)
+display(dx_image, &quot;./images/cameraman_dx.png&quot;)
+
+dy = np.array([[1], [-1]])
+dy_image = apply_filter_to_image(&quot;./images/cameraman.png&quot;, dy)
+display(dy_image, &quot;./images/cameraman_dy.png&quot;)
+
+gradient_image = np.sqrt(np.square(dx_image) + np.square(dy_image))
+display(gradient_image, &quot;./images/cameraman_grad.png&quot;)
+display(gradient_image &gt; 0.3, &quot;./images/cameraman_binarized.png&quot;)</code></pre>
+      </figure>
+
+      <p class="sub-intro">With the 2 derivative approximations, we take the gradient magnitude, which is the square root of the sum of our squared approximations. This reconstructs an image with edges in both direction. The edges can appear soft, however, and include noise. The solution to this is binarization: Introducing a hard cutoff for a pixel value. Pixels below the cutoff are omitted, and pixels above the cutoff are scaled up to 1.</p>
+
+      <div class="figs">
+        <figure>
+          <div class="plate"><img src="./images/cameraman_dx.png" alt="Cameraman image convolved with D_x"></div>
+          <figcaption>
+            <span class="fig-label">Partial derivative in x</span>
+            <span class="fig-note">Convolved with D_x. This picks up the vertical edges, like the tripod legs and the building sides.</span>
+          </figcaption>
+        </figure>
+        <figure>
+          <div class="plate"><img src="./images/cameraman_dy.png" alt="Cameraman image convolved with D_y"></div>
+          <figcaption>
+            <span class="fig-label">Partial derivative in y</span>
+            <span class="fig-note">Convolved with D_y. This picks up the horizontal edges, like the grass line and the camera body.</span>
+          </figcaption>
+        </figure>
+        <figure>
+          <div class="plate"><img src="./images/cameraman_grad.png" alt="Gradient magnitude of the cameraman image"></div>
+          <figcaption>
+            <span class="fig-label">Gradient magnitude</span>
+            <span class="fig-note">Both directions combined. The edges are all here now, but they are soft and there is noise in the grass.</span>
+          </figcaption>
+        </figure>
+        <figure>
+          <div class="plate"><img src="./images/cameraman_binarized.png" alt="Binarized edge image of the cameraman"></div>
+          <figcaption>
+            <span class="fig-label">Binarized edges</span>
+            <span class="fig-note">My binarization threshold was 0.3. I chose this because it got rid of the majority of the noise while preserving the edges.</span>
+          </figcaption>
+        </figure>
+      </div>
+    </div>
+
+    <!-- ---------- 1.3 ---------- -->
+    <div class="subsec">
+      <h3>1.3 &nbsp;Derivative of Gaussian (DoG) Filter</h3>
+      <p class="sub-intro">The finite difference results in 1.2 were noisy, since every small change between neighboring pixels shows up as an edge. To fix this, we can first blur the image with a gaussian, which smooths out the noise, and then take the derivatives like before.</p>
+
+      <div class="figs">
+        <figure>
+          <div class="plate"><img src="./images/cameraman_smooth_grad.png" alt="Gradient magnitude of the cameraman after Gaussian smoothing"></div>
+          <figcaption>
+            <span class="fig-label">Gradient magnitude, smoothed first</span>
+            <span class="fig-note">Blurred with a 3x3 Gaussian at sigma 1, then run through the same finite difference steps as 1.2.</span>
+          </figcaption>
+        </figure>
+        <figure>
+          <div class="plate"><img src="./images/cameraman_smooth_grad_binarized.png" alt="Binarized edges of the cameraman after Gaussian smoothing"></div>
+          <figcaption>
+            <span class="fig-label">Binarized edges, smoothed first</span>
+            <span class="fig-note">My binarization threshold this time was 0.15, lower than in 1.2 because smoothing brings the gradient values down.</span>
+          </figcaption>
+        </figure>
+      </div>
+
+      <p class="sub-intro">What differences between 1.2 and 1.3? 1.3 has much smoother edges, compared to the noise in 1.2. The gaussian aspect made the derivative estimations smoother, which lead to a better looking image.</p>
+
+      <div class="figs">
+        <figure>
+          <div class="plate"><img src="./images/cameraman_dogx.png" alt="Cameraman convolved with the DoG filter in x"></div>
+          <figcaption>
+            <span class="fig-label">Cameraman &#8859; DoG x</span>
+            <span class="fig-note">The cameraman convolved once with the Gaussian already differentiated in x.</span>
+          </figcaption>
+        </figure>
+        <figure>
+          <div class="plate"><img src="./images/cameraman_dogy.png" alt="Cameraman convolved with the DoG filter in y"></div>
+          <figcaption>
+            <span class="fig-label">Cameraman &#8859; DoG y</span>
+            <span class="fig-note">The same in y, picking up the horizontal edges.</span>
+          </figcaption>
+        </figure>
+        <figure>
+          <div class="plate"><img src="./images/cameraman_singleconv.png" alt="Gradient magnitude computed with a single convolution per direction using DoG filters"></div>
+          <figcaption>
+            <span class="fig-label">Single-convolution result</span>
+            <span class="fig-note">This matches the two-convolution version above exactly, which is what we expect since convolution is associative.</span>
+          </figcaption>
+        </figure>
+      </div>
+    </div>
+
+  </section>
+
+  <!-- ======================= PART 2 ======================= -->
+
+  <section class="writeup">
+    <div class="sec-head">
+      <span class="sec-num">2</span>
+      <h2>Fun with Frequencies</h2>
+    </div>
+    <!-- ---------- 2.1 ---------- -->
+    <div class="subsec">
+      <h3>2.1 &nbsp;Image Sharpening</h3>
+      <p class="sub-intro">To sharpen an image, you must first extract the low-frequency parts of the image, which can be done through a gaussian blur. With that gaussian blur, you can subtract the low frequencies from the base image, and you will be left with only the high frequencies. This however, is not the sharp image. We must add the high frequencies to the original image, and this produces the sharpened image.</p>
+
+      <p class="sub-intro">The trick, is that this can all be combined into one filter, called the unsharp mask. Since the identity kernel returns the image unchanged, subtracting the gaussian from it gives a high pass filter, and adding that back to the identity gives <code class="inline">identity + alpha * (identity - gaussian)</code>. Convolving with that single kernel does all three steps at once, and alpha controls how much of the high frequencies get added back.</p>
+
+      <figure class="code-block">
+        <figcaption class="code-label">The unsharp mask filter</figcaption>
+        <pre><code class="language-python">def unsharp_mask(input, alpha=1.0):
+    # alpha defines how sharp
+    if isinstance(input, str):
+        input = parse_image(input)
+
+    # low-pass filter
+    g_size, g_sig = 3, 1
+    gaussian_kernel = cv.getGaussianKernel(g_size, g_sig) @ cv.getGaussianKernel(g_size, g_sig).T
+
+    identity = np.array([[0, 0, 0],
+                         [0, 1, 0],
+                         [0, 0, 0]])
+
+    high_pass = identity - gaussian_kernel
+    unsharp_kernel = identity + alpha * high_pass
+
+    sharpened = apply_filter_to_image(input, unsharp_kernel)
+    return sharpened</code></pre>
+      </figure>
+
+      <h4 class="subsub">Taj Mahal</h4>
+      <div class="figs">
+        <figure>
+          <div class="plate"><img src="./images/taj_color.png" alt="Original Taj Mahal image"></div>
+          <figcaption><span class="fig-label">Original</span><span class="fig-note">The Taj Mahal image before sharpening.</span></figcaption>
+        </figure>
+        <figure>
+          <div class="plate"><img src="./images/taj_low.png" alt="Taj Mahal blurred, the low frequencies"></div>
+          <figcaption><span class="fig-label">Blurred (low frequencies)</span><span class="fig-note">The original convolved with a 3x3 Gaussian at sigma 1. Only the low frequencies survive.</span></figcaption>
+        </figure>
+        <figure>
+          <div class="plate"><img src="./images/taj_high.png" alt="High frequency residual of the Taj Mahal"></div>
+          <figcaption><span class="fig-label">High frequencies</span><span class="fig-note">The blurred version subtracted from the original. These values are signed, so I offset them by 0.5 to make the negative half visible. Mid gray is zero here.</span></figcaption>
+        </figure>
+        <figure>
+          <div class="plate"><img src="./images/taj_unsharp.png" alt="Taj Mahal sharpened with the unsharp mask filter"></div>
+          <figcaption><span class="fig-label">Sharpened</span><span class="fig-note">The high frequencies added back on top of the original at alpha 3, done in a single convolution with the unsharp kernel.</span></figcaption>
+        </figure>
+      </div>
+
+      <h4 class="subsub">My own image</h4>
+      <div class="figs">
+        <figure>
+          <div class="plate"><img src="./images/ellis_calhockey_color.jpg" alt="Original photo"></div>
+          <figcaption><span class="fig-label">Original</span><span class="fig-note">A photo of my own, before sharpening.</span></figcaption>
+        </figure>
+        <figure>
+          <div class="plate"><img src="./images/ellis_calhockey_unsharp.jpg" alt="The same photo after the unsharp mask"></div>
+          <figcaption><span class="fig-label">Sharpened</span><span class="fig-note">After the unsharp mask. The jersey lettering and the jacket seams come out more.</span></figcaption>
+        </figure>
+      </div>
+
+      <h4 class="subsub">Varying the sharpening amount</h4>
+      <div class="figs stack">
+        <figure>
+          <div class="plate"><img src="./images/ellis_calhockey_unsharp_a3.jpg" alt="Sharpened with alpha 3"></div>
+          <figcaption><span class="fig-label">&alpha; = 3</span><span class="fig-note">A reasonable amount. The detail is stronger without looking processed.</span></figcaption>
+        </figure>
+        <figure>
+          <div class="plate"><img src="./images/ellis_calhockey_unsharp_a5.jpg" alt="Sharpened with alpha 5"></div>
+          <figcaption><span class="fig-label">&alpha; = 5</span><span class="fig-note">Getting harsh. Light outlines start showing up along the high contrast edges.</span></figcaption>
+        </figure>
+        <figure>
+          <div class="plate"><img src="./images/ellis_calhockey_unsharp_a10.jpg" alt="Sharpened with alpha 10"></div>
+          <figcaption><span class="fig-label">&alpha; = 10</span><span class="fig-note">Too far. Images look unnatural.</span></figcaption>
+        </figure>
+      </div>
+
+      <h4 class="subsub">Blur, then re-sharpen</h4>
+      <div class="figs stack">
+        <figure>
+          <div class="plate"><img src="./images/ellis_onice_color.jpg" alt="Sharp original photo"></div>
+          <figcaption><span class="fig-label">Sharp original</span><span class="fig-note">A photo that was already in focus.</span></figcaption>
+        </figure>
+        <figure>
+          <div class="plate"><img src="./images/ellis_onice_blurry.jpg" alt="The same photo after a Gaussian blur"></div>
+          <figcaption><span class="fig-label">Blurred</span><span class="fig-note">The same photo after a Gaussian blur. The face and the jersey texture are mostly gone.</span></figcaption>
+        </figure>
+        <figure>
+          <div class="plate"><img src="./images/ellis_onice_unsharp.jpg" alt="The blurred photo run back through the unsharp mask"></div>
+          <figcaption><span class="fig-label">Re-sharpened</span><span class="fig-note">The blurred version run back through the unsharp mask. The edges come back hard, but the fine detail does not.</span></figcaption>
+        </figure>
+      </div>
+      <p class="sub-intro">We lose some frequency information when we blur an image that can not be fully recovered by applying the unsharp mask. The unsharp mask can only amplify the frequencies that are still in the image, so the edges that survived the blur come back with strong contrast, but the detail that was wiped out stays gone. You can see this around the helmet, where the boosted edge leaves a dark halo, while the face inside the cage is still soft. Sharpening is not the inverse of blurring.</p>
+    </div>
+
+    <!-- ---------- 2.2 ---------- -->
+    <div class="subsec">
+      <h3>2.2 &nbsp;Hybrid Images</h3>
+      <p class="sub-intro">A hybrid image is two images combined into one, where what you see depends on how far away you are. Up close, our eyes pick up the high frequencies, and from far away, only the low frequencies are visible. To make one, we low pass one image with a gaussian, high pass the other with the impulse minus a gaussian, and add them together. The images need to be aligned first, or the two never line up into one picture.</p>
+
+      <h4 class="subsub">Full process: me and Brad Pitt</h4>
+      <div class="figs">
+        <figure>
+          <div class="plate"><img src="./images/ellis_id.jpg" alt="First input image, me"></div>
+          <figcaption><span class="fig-label">Input 1</span><span class="fig-note">The first rule of fight club:</span></figcaption>
+        </figure>
+        <figure>
+          <div class="plate"><img src="./images/pitt.jpeg" alt="Second input image, Brad Pitt"></div>
+          <figcaption><span class="fig-label">Input 2</span><span class="fig-note">We don't talk about fight club</span></figcaption>
+        </figure>
+        <figure>
+          <div class="plate"><img src="./images/ellis_aligned.png" alt="My photo after alignment"></div>
+          <figcaption><span class="fig-label">Input 1, aligned</span><span class="fig-note">Scaled and rotated so my eyes line up with his.</span></figcaption>
+        </figure>
+        <figure>
+          <div class="plate"><img src="./images/pitt_aligned.png" alt="Brad Pitt photo after alignment"></div>
+          <figcaption><span class="fig-label">Input 2, aligned</span><span class="fig-note">The same alignment applied to his photo.</span></figcaption>
+        </figure>
+        <figure>
+          <div class="plate"><img src="./images/ellis_high.png" alt="High-pass filtered photo of me"></div>
+          <figcaption><span class="fig-label">High-pass filtered</span><span class="fig-note">My photo through the impulse minus a gaussian at sigma 4. This is the face you see up close.</span></figcaption>
+        </figure>
+        <figure>
+          <div class="plate"><img src="./images/pitt_low.png" alt="Low-pass filtered Brad Pitt"></div>
+          <figcaption><span class="fig-label">Low-pass filtered</span><span class="fig-note">Brad Pitt through a gaussian at sigma 7. This is the face you see from far away.</span></figcaption>
+        </figure>
+      </div>
+
+      <h5 class="subsub">Frequency analysis</h5>
+      <figure class="wide-figure">
+        <div class="plate"><img src="./images/ellis_pitt_fft.png" alt="Log magnitude Fourier transforms of both inputs, both filtered images, and the hybrid"></div>
+        <figcaption>
+          <span class="fig-label">Log magnitude of the Fourier transform at each step</span>
+          <span class="fig-note">The center is low frequency and the edges are high. Both originals cover the whole range. The low pass keeps the center and drops the edges, the high pass does the opposite, and the hybrid has both.</span>
+        </figcaption>
+      </figure>
+
+      <div class="figs one">
+        <figure>
+          <div class="plate"><img src="./images/ellis_pitt_hybrid.png" alt="Hybrid of me and Brad Pitt"></div>
+          <figcaption><span class="fig-label">Hybrid result</span><span class="fig-note">The cutoffs I landed on were a sigma of 4 on the high pass for me and 7 on the low pass for Brad Pitt.</span></figcaption>
+        </figure>
+      </div>
+
+      <p class="sub-intro">Each sigma sets a cutoff frequency. A bigger sigma means a lower cutoff, roughly <code class="inline">0.187 / sigma</code> cycles per pixel.</p>
+
+      <table class="numbers">
+        <thead>
+          <tr><th>Filter</th><th>Sigma</th><th>Cutoff (cycles/px)</th></tr>
+        </thead>
+        <tbody>
+          <tr><td>My photo, high pass</td><td>4</td><td>0.047</td></tr>
+          <tr><td>Brad Pitt, low pass</td><td>7</td><td>0.027</td></tr>
+        </tbody>
+      </table>
+
+      <p class="sub-intro">His face keeps what is below the lower cutoff, mine keeps what is above the higher one. The gap between them is why the two faces separate.</p>
+
+      <figure class="scale-figure">
+        <div class="scale-row">
+          <img src="./images/ellis_pitt_hybrid.png" alt="Hybrid at full size" style="width: 260px;">
+          <img src="./images/ellis_pitt_hybrid.png" alt="Hybrid at half size" style="width: 130px;">
+          <img src="./images/ellis_pitt_hybrid.png" alt="Hybrid at quarter size" style="width: 65px;">
+          <img src="./images/ellis_pitt_hybrid.png" alt="Hybrid at eighth size" style="width: 33px;">
+        </div>
+        <figcaption>
+          <span class="fig-label">The same hybrid at decreasing sizes</span>
+          <span class="fig-note">Shrinking the image throws away the high frequencies, which is the same thing that happens when you step back from it. The interpretation flips as it gets smaller.</span>
+        </figcaption>
+      </figure>
+
+      <h4 class="subsub">Hybrid 2: Connor Bedard and me on the ice</h4>
+      <div class="figs">
+        <figure>
+          <div class="plate"><img src="./images/bedsy.jpeg" alt="First input image, Connor Bedard"></div>
+          <figcaption><span class="fig-label">Input 1</span><span class="fig-note">Connor Bedard, wearing his signature &ldquo;bubble&rdquo; visor.</span></figcaption>
+        </figure>
+        <figure>
+          <div class="plate"><img src="./images/ellis_onice_color.jpg" alt="Second input image, me on the ice"></div>
+          <figcaption><span class="fig-label">Input 2</span><span class="fig-note">Me, wearing mine (for the record, I wore it first).</span></figcaption>
+        </figure>
+      </div>
+      <div class="figs one">
+        <figure>
+          <div class="plate"><img src="./images/ellis_bedsy_hybrid.png" alt="Hybrid of Connor Bedard and me on the ice"></div>
+          <figcaption><span class="fig-label">Hybrid result</span><span class="fig-note">If you look at it, you will see Connor. If you squint your eyes, you will see his inspiration.</span></figcaption>
+        </figure>
+      </div>
+
+      <figure class="scale-figure">
+        <div class="scale-row">
+          <img src="./images/ellis_bedsy_hybrid.png" alt="Hybrid at full size" style="width: 260px;">
+          <img src="./images/ellis_bedsy_hybrid.png" alt="Hybrid at half size" style="width: 130px;">
+          <img src="./images/ellis_bedsy_hybrid.png" alt="Hybrid at quarter size" style="width: 65px;">
+          <img src="./images/ellis_bedsy_hybrid.png" alt="Hybrid at eighth size" style="width: 33px;">
+        </div>
+      </figure>
+
+      <h4 class="subsub">Hybrid 3: Dylan and a horse</h4>
+      <div class="figs">
+        <figure>
+          <div class="plate"><img src="./images/dylan.jpg" alt="First input image, Dylan"></div>
+          <figcaption><span class="fig-label">Input 1</span><span class="fig-note">Dylan, low passed at sigma 8. This is what you see from far away.</span></figcaption>
+        </figure>
+        <figure>
+          <div class="plate"><img src="./images/horse.jpg" alt="Second input image, a horse"></div>
+          <figcaption><span class="fig-label">Input 2</span><span class="fig-note">A horse, high passed at sigma 2. This is what you see up close.</span></figcaption>
+        </figure>
+      </div>
+      <div class="figs one">
+        <figure>
+          <div class="plate"><img src="./images/dylan_horse_hybrid.png" alt="Hybrid of Dylan and a horse"></div>
+          <figcaption><span class="fig-label">Hybrid result</span><span class="fig-note">I can't tell the difference!</span></figcaption>
+        </figure>
+      </div>
+
+      <figure class="scale-figure">
+        <div class="scale-row">
+          <img src="./images/dylan_horse_hybrid.png" alt="Hybrid at full size" style="width: 260px;">
+          <img src="./images/dylan_horse_hybrid.png" alt="Hybrid at half size" style="width: 130px;">
+          <img src="./images/dylan_horse_hybrid.png" alt="Hybrid at quarter size" style="width: 65px;">
+          <img src="./images/dylan_horse_hybrid.png" alt="Hybrid at eighth size" style="width: 33px;">
+        </div>
+      </figure>
+
+
+      <h4 class="subsub">Hybrid 4: Derek and Nutmeg</h4>
+      <div class="figs">
+        <figure>
+          <div class="plate"><img src="./images/DerekPicture.jpg" alt="First input image, Derek"></div>
+          <figcaption><span class="fig-label">Input 1</span><span class="fig-note">Derek, low passed at sigma 10. This is what you see from far away.</span></figcaption>
+        </figure>
+        <figure>
+          <div class="plate"><img src="./images/nutmeg.jpg" alt="Second input image, Nutmeg"></div>
+          <figcaption><span class="fig-label">Input 2</span><span class="fig-note">Nutmeg, high passed at sigma 5. This is what you see up close.</span></figcaption>
+        </figure>
+      </div>
+      <div class="figs one">
+        <figure>
+          <div class="plate"><img src="./images/derek_nutmeg_hybrid.jpg" alt="Hybrid of Derek and Nutmeg"></div>
+          <figcaption><span class="fig-label">Hybrid result</span><span class="fig-note">The sample pair from the course. Up close it reads as Nutmeg, and from a distance Derek takes over.</span></figcaption>
+        </figure>
+      </div>
+
+      <figure class="scale-figure">
+        <div class="scale-row">
+          <img src="./images/derek_nutmeg_hybrid.jpg" alt="Hybrid at full size" style="width: 260px;">
+          <img src="./images/derek_nutmeg_hybrid.jpg" alt="Hybrid at half size" style="width: 130px;">
+          <img src="./images/derek_nutmeg_hybrid.jpg" alt="Hybrid at quarter size" style="width: 65px;">
+          <img src="./images/derek_nutmeg_hybrid.jpg" alt="Hybrid at eighth size" style="width: 33px;">
+        </div>
+      </figure>
+    </div>
+
+    <!-- ---------- 2.3 ---------- -->
+    <div class="subsec">
+      <h3>2.3 &nbsp;Gaussian and Laplacian Stacks</h3>
+      <p class="sub-intro">A gaussian stack is like a pyramid, but without the downsampling. Each level is the previous level blurred again with a gaussian, so every level stays the same size as the original. The laplacian stack is the difference between each level and the next, which leaves only the frequencies lost in that blur. Adding all the laplacian levels back together, plus the last gaussian level, gives back the original image.</p>
+
+      <h4 class="subsub">Apple</h4>
+      <div class="figs stack">
+        <figure><div class="plate"><img src="./images/apple_gaussian_0.png" alt="Apple, Gaussian stack level 0"></div><figcaption><span class="fig-label">Gaussian, level 0</span></figcaption></figure>
+        <figure><div class="plate"><img src="./images/apple_gaussian_2.png" alt="Apple, Gaussian stack level 2"></div><figcaption><span class="fig-label">Gaussian, level 2</span></figcaption></figure>
+        <figure><div class="plate"><img src="./images/apple_gaussian_4.png" alt="Apple, Gaussian stack level 4"></div><figcaption><span class="fig-label">Gaussian, level 4</span></figcaption></figure>
+        <figure><div class="plate"><img src="./images/apple_laplacian_0.png" alt="Apple, Laplacian stack level 0"></div><figcaption><span class="fig-label">Laplacian, level 0</span></figcaption></figure>
+        <figure><div class="plate"><img src="./images/apple_laplacian_2.png" alt="Apple, Laplacian stack level 2"></div><figcaption><span class="fig-label">Laplacian, level 2</span></figcaption></figure>
+        <figure><div class="plate"><img src="./images/apple_laplacian_4.png" alt="Apple, Laplacian stack level 4"></div><figcaption><span class="fig-label">Laplacian, level 4</span></figcaption></figure>
+      </div>
+
+      <h4 class="subsub">Orange</h4>
+      <div class="figs stack">
+        <figure><div class="plate"><img src="./images/orange_gaussian_0.png" alt="Orange, Gaussian stack level 0"></div><figcaption><span class="fig-label">Gaussian, level 0</span></figcaption></figure>
+        <figure><div class="plate"><img src="./images/orange_gaussian_2.png" alt="Orange, Gaussian stack level 2"></div><figcaption><span class="fig-label">Gaussian, level 2</span></figcaption></figure>
+        <figure><div class="plate"><img src="./images/orange_gaussian_4.png" alt="Orange, Gaussian stack level 4"></div><figcaption><span class="fig-label">Gaussian, level 4</span></figcaption></figure>
+        <figure><div class="plate"><img src="./images/orange_laplacian_0.png" alt="Orange, Laplacian stack level 0"></div><figcaption><span class="fig-label">Laplacian, level 0</span></figcaption></figure>
+        <figure><div class="plate"><img src="./images/orange_laplacian_2.png" alt="Orange, Laplacian stack level 2"></div><figcaption><span class="fig-label">Laplacian, level 2</span></figcaption></figure>
+        <figure><div class="plate"><img src="./images/orange_laplacian_4.png" alt="Orange, Laplacian stack level 4"></div><figcaption><span class="fig-label">Laplacian, level 4</span></figcaption></figure>
+      </div>
+
+      <h4 class="subsub">Figure 3.42 recreation</h4>
+      <div class="figs stack">
+        <figure><div class="plate"><img src="./images/apple_masked_0.png" alt="(a) Apple, level 0"></div><figcaption><span class="fig-label">(a) Apple, level 0</span></figcaption></figure>
+        <figure><div class="plate"><img src="./images/orange_masked_0.png" alt="(b) Orange, level 0"></div><figcaption><span class="fig-label">(b) Orange, level 0</span></figcaption></figure>
+        <figure><div class="plate"><img src="./images/oraple_0.png" alt="(c) Blended, level 0"></div><figcaption><span class="fig-label">(c) Blended, level 0</span></figcaption></figure>
+        <figure><div class="plate"><img src="./images/apple_masked_2.png" alt="(d) Apple, level 2"></div><figcaption><span class="fig-label">(d) Apple, level 2</span></figcaption></figure>
+        <figure><div class="plate"><img src="./images/orange_masked_2.png" alt="(e) Orange, level 2"></div><figcaption><span class="fig-label">(e) Orange, level 2</span></figcaption></figure>
+        <figure><div class="plate"><img src="./images/oraple_2.png" alt="(f) Blended, level 2"></div><figcaption><span class="fig-label">(f) Blended, level 2</span></figcaption></figure>
+        <figure><div class="plate"><img src="./images/apple_masked_4.png" alt="(g) Apple, level 4"></div><figcaption><span class="fig-label">(g) Apple, level 4</span></figcaption></figure>
+        <figure><div class="plate"><img src="./images/orange_masked_4.png" alt="(h) Orange, level 4"></div><figcaption><span class="fig-label">(h) Orange, level 4</span></figcaption></figure>
+        <figure><div class="plate"><img src="./images/oraple_4.png" alt="(i) Blended, level 4"></div><figcaption><span class="fig-label">(i) Blended, level 4</span></figcaption></figure>
+        <figure><div class="plate"><img src="./images/apple_masked.png" alt="(j) Apple, reconstructed"></div><figcaption><span class="fig-label">(j) Apple, reconstructed</span></figcaption></figure>
+        <figure><div class="plate"><img src="./images/orange_masked.png" alt="(k) Orange, reconstructed"></div><figcaption><span class="fig-label">(k) Orange, reconstructed</span></figcaption></figure>
+        <figure><div class="plate"><img src="./images/oraple.png" alt="(l) The oraple"></div><figcaption><span class="fig-label">(l) The oraple</span></figcaption></figure>
+      </div>
+    </div>
+
+    <!-- ---------- 2.4 ---------- -->
+    <div class="subsec">
+      <h3>2.4 &nbsp;Multiresolution Blending</h3>
+      <p class="sub-intro">To blend two images, we build a laplacian stack for each image and a gaussian stack for the mask. At each level, we combine the two laplacians using that level of the mask, then add all the levels back up. Since the mask gets blurrier at each level, the low frequencies blend over a wide area and the high frequencies over a narrow one, which hides the seam.</p>
+
+      <h4 class="subsub">The oraple</h4>
+      <div class="figs">
+        <figure>
+          <div class="plate"><img src="./images/apple.jpeg" alt="Apple"></div>
+          <figcaption><span class="fig-label">Apple</span><span class="fig-note">The left half.</span></figcaption>
+        </figure>
+        <figure>
+          <div class="plate"><img src="./images/orange.jpeg" alt="Orange"></div>
+          <figcaption><span class="fig-label">Orange</span><span class="fig-note">The right half.</span></figcaption>
+        </figure>
+      </div>
+      <div class="figs one">
+        <figure>
+          <div class="plate"><img src="./images/oraple.png" alt="The blended oraple"></div>
+          <figcaption><span class="fig-label">Oraple</span><span class="fig-note">No visible seam.</span></figcaption>
+        </figure>
+      </div>
+
+      <h4 class="subsub">Custom blend 1: 18 and 23</h4>
+      <div class="figs">
+        <figure>
+          <div class="plate"><img src="./images/ellis2026.jpg" alt="Me on my 23rd birthday"></div>
+          <figcaption><span class="fig-label">Input 1</span><span class="fig-note">Me on my 23rd birthday.</span></figcaption>
+        </figure>
+        <figure>
+          <div class="plate"><img src="./images/ellis2021.jpg" alt="Me on my 18th birthday"></div>
+          <figcaption><span class="fig-label">Input 2</span><span class="fig-note">Me on my 18th birthday.</span></figcaption>
+        </figure>
+      </div>
+      <div class="figs one">
+        <figure>
+          <div class="plate"><img src="./images/ellis_2026_2021.png" alt="Blend of me at 23 on the left and 18 on the right"></div>
+          <figcaption><span class="fig-label">Result</span><span class="fig-note">5 years apart, blended along a vertical seam.</span></figcaption>
+        </figure>
+      </div>
+
+      <h4 class="subsub">Custom blend 2: the moon ball</h4>
+      <div class="figs">
+        <figure>
+          <div class="plate"><img src="./images/moon.jpg" alt="The moon in a night sky"></div>
+          <figcaption><span class="fig-label">Input 1</span><span class="fig-note">The moon.</span></figcaption>
+        </figure>
+        <figure>
+          <div class="plate"><img src="./images/ball.jpg" alt="A basketball"></div>
+          <figcaption><span class="fig-label">Input 2</span><span class="fig-note">The ball.</span></figcaption>
+        </figure>
+        <figure>
+          <div class="plate"><img src="./images/moon_ball.png" alt="A basketball blended into the night sky in place of the moon"></div>
+          <figcaption><span class="fig-label">Result</span><span class="fig-note">Look up in the sky and what do you see? Moooooon ball!</span></figcaption>
+        </figure>
+      </div>
+
+      <h4 class="subsub">Process illustration (Figure 10): 18 and 23</h4>
+      <p class="sub-intro">Each row is one level of the laplacian stack. The left column is my 23 photo times the mask, the middle is my 18 photo times the opposite of the mask, and the right is the two added together. At level 0 the mask is barely blurred, so the fine detail meets at an almost hard line. By level 4 the mask is very blurred, so the overall shading fades across a wide area. Adding every level together gives the final blend, with no visible seam.</p>
+      <div class="figs stack">
+        <figure><div class="plate"><img src="./images/ellis2026_masked_0.png" alt="23 photo, masked Laplacian level 0"></div><figcaption><span class="fig-label">23, level 0</span></figcaption></figure>
+        <figure><div class="plate"><img src="./images/ellis2021_masked_0.png" alt="18 photo, masked Laplacian level 0"></div><figcaption><span class="fig-label">18, level 0</span></figcaption></figure>
+        <figure><div class="plate"><img src="./images/ellis_2026_2021_0.png" alt="Blended Laplacian level 0"></div><figcaption><span class="fig-label">Blended, level 0</span></figcaption></figure>
+        <figure><div class="plate"><img src="./images/ellis2026_masked_2.png" alt="23 photo, masked Laplacian level 2"></div><figcaption><span class="fig-label">23, level 2</span></figcaption></figure>
+        <figure><div class="plate"><img src="./images/ellis2021_masked_2.png" alt="18 photo, masked Laplacian level 2"></div><figcaption><span class="fig-label">18, level 2</span></figcaption></figure>
+        <figure><div class="plate"><img src="./images/ellis_2026_2021_2.png" alt="Blended Laplacian level 2"></div><figcaption><span class="fig-label">Blended, level 2</span></figcaption></figure>
+        <figure><div class="plate"><img src="./images/ellis2026_masked_4.png" alt="23 photo, masked Laplacian level 4"></div><figcaption><span class="fig-label">23, level 4</span></figcaption></figure>
+        <figure><div class="plate"><img src="./images/ellis2021_masked_4.png" alt="18 photo, masked Laplacian level 4"></div><figcaption><span class="fig-label">18, level 4</span></figcaption></figure>
+        <figure><div class="plate"><img src="./images/ellis_2026_2021_4.png" alt="Blended Laplacian level 4"></div><figcaption><span class="fig-label">Blended, level 4</span></figcaption></figure>
+      </div>
+    </div>
+  </section>
+
+  <!-- ======================= TAKEAWAY ======================= -->
+
+  <section class="writeup">
+    <div class="sec-head">
+      <span class="sec-num">3</span>
+      <h2>What I Learned</h2>
+    </div>
+    <p class="sec-intro">I learned about how combining different frequencies can create new, smooth images. Almost everything in this project came down to splitting an image into its low and high frequencies with a gaussian, and then deciding what to do with each part. Sharpening adds more of the high frequencies back, hybrid images take the low frequencies from one picture and the high from another, and blending mixes each band separately so the seam disappears. It also showed me that this only goes one way: once a blur throws frequencies away, no filter can bring them back.</p>
+  </section>
+
+</main>
+
+<footer class="sitefoot">
+  <span>© 2026 Ellis O'Dowd</span>
+  <span>UC Berkeley CS180</span>
+</footer>
+
+</body>
+</html>
