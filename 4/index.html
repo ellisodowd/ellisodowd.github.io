@@ -1,0 +1,223 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Project 4 — Image Warping and Mosaicing</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Source+Serif+4:opsz,wght@8..60,400;8..60,600;8..60,700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<link rel="stylesheet" href="../styles.css">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/languages/python.min.js"></script>
+<script>document.addEventListener('DOMContentLoaded',function(){if(window.hljs)hljs.highlightAll();});</script>
+<style>
+  .wide-figure .plate img { max-height: none; object-fit: contain; }
+  .figs .plate img { object-fit: contain; }
+  .subsec .callout { margin-left: 0; }
+  .part-banner { padding: 40px 6vw 0; }
+  .part-banner span { font-size: 14px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; color: var(--gold-dark); }
+  pre.matrix { font-family: 'IBM Plex Mono', monospace; font-size: 14px; overflow-x: auto; }
+</style>
+</head>
+<body>
+
+<header class="topbar">
+  <div class="brand">
+    <span class="brand-name">Ellis O'Dowd</span>
+    <span class="brand-course">CS 180 · Fall 2026</span>
+  </div>
+  <nav class="topnav">
+    <a href="../index.html">Projects</a>
+    <a href="https://github.com/ellisodowd">GitHub</a>
+  </nav>
+</header>
+
+<div class="page-head">
+  <a class="backlink" href="../index.html">
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M19 12H5"></path><path d="M11 18l-6-6 6-6"></path></svg>
+    All projects
+  </a>
+  <div class="page-title">
+    <span class="page-kicker">Project 4</span>
+    <h1>Stitching the View Together</h1>
+  </div>
+</div>
+
+<main>
+
+  <div class="part-banner"><span>Part A · Image Warping and Mosaicing</span></div>
+
+  <!-- ======================= A1 ======================= -->
+  <section class="writeup">
+    <div class="sec-head">
+      <span class="sec-num">1</span>
+      <h2>Shooting the Pictures</h2>
+    </div>
+    <p class="sec-intro">Stitching two photos together seems like it would be simple. Take two pictures, slide one over until they match up. This however, does not work. When you turn the camera, the second photo is not just shifted, it is seen from a different angle, and lines tilt. To line them up we need a homography, and a homography only works if both photos share the same center of projection. For each pair of photos, I stood in one spot, and rotated the camera between shots. I was fortunate to have been already in the habit of doing this, so I did not need to shoot new pictures for this project.</p>
+    <div class="subsec">
+      <figure class="wide-figure"><div class="plate"><img src="./images/beach_src.jpg" alt="Lake Tahoe source pair"></div><figcaption><span class="fig-label">Kiva Beach, South Lake Tahoe</span></figcaption></figure>
+      <figure class="wide-figure"><div class="plate"><img src="./images/rink_src.jpg" alt="Hockey arena source pair"></div><figcaption><span class="fig-label">Tahoe Blue Event Center</span><span class="fig-note">Where I played junior hockey for the Lake Tahoe Lakers, shot on the 0.5x ultrawide lens.</span></figcaption></figure>
+      <figure class="wide-figure"><div class="plate"><img src="./images/hawaii_src.jpg" alt="Hawaii source pair"></div><figcaption><span class="fig-label">Koko Head, Hawaii</span><span class="fig-note">The trail is 1,048 steps straight up an old railway track. You can see some of them on the right.</span></figcaption></figure>
+    </div>
+  </section>
+
+  <!-- ======================= A2 ======================= -->
+  <section class="writeup">
+    <div class="sec-head">
+      <span class="sec-num">2</span>
+      <h2>Recovering Homographies</h2>
+    </div>
+    <p class="sec-intro">A homography is a 3x3 matrix H that takes a point <code class="inline">(x, y)</code> in one photo to <code class="inline">(x', y')</code> in the other: <code class="inline">[wx', wy', w] = H [x, y, 1]</code>. The extra w is what lets it handle perspective, and to get the actual point back we divide by it. We can fix the bottom right entry of H to 1, which leaves 8 unknowns. Each pair of matching points gives us 2 equations, so 4 points is enough to solve for H exactly. My clicks are not perfect though, so I clicked 6 to 8 points per pair and solved with least squares, which averages out the small errors.</p>
+
+    <div class="subsec">
+      <h3>2.1 &nbsp;The System of Equations</h3>
+      <p class="sub-intro">If we write out the division by w and move everything to one side, each pair of points <code class="inline">(x, y) → (x', y')</code> gives two rows of a linear system <code class="inline">A h = b</code>. Here h is the 8 unknown entries of H, read row by row:</p>
+      <pre class="matrix">⎡ x  y  1  0  0  0  −x′x  −x′y ⎤        ⎡ x′ ⎤
+⎣ 0  0  0  x  y  1  −y′x  −y′y ⎦ · h  =  ⎣ y′ ⎦</pre>
+      <figure class="code-block">
+        <figcaption class="code-label">computeH</figcaption>
+        <pre><code class="language-python">def computeH(im1_pts, im2_pts):
+    im1_pts = np.asarray(im1_pts, dtype=float)
+    im2_pts = np.asarray(im2_pts, dtype=float)
+    rows = []
+    b = im2_pts.flatten()
+    for (x, y), (x_, y_) in zip(im1_pts, im2_pts):
+        rows.append([x, y, 1, 0 ,0 ,0, -x_*x, -x_*y])
+        rows.append([0, 0, 0, x ,y ,1, -y_*x, -y_*y])
+    A = np.array(rows)
+    h = np.linalg.lstsq(A, b)[0]
+    H = np.append(h, 1).reshape(3, 3)
+    return H</code></pre>
+      </figure>
+    </div>
+
+    <div class="subsec">
+      <h3>2.2 &nbsp;Correspondences</h3>
+      <p class="sub-intro">Matching numbers are the same point in both photos. I tried to pick sharp corners that are far away from the camera, like tree tops, mountain ridges, rink markings, and ceiling trusses.</p>
+      <figure class="wide-figure"><div class="plate"><img src="./images/beach_pts.jpg" alt="Lake Tahoe correspondences"></div><figcaption><span class="fig-label">Kiva Beach: 8 points</span></figcaption></figure>
+      <figure class="wide-figure"><div class="plate"><img src="./images/rink_pts.jpg" alt="Hockey arena correspondences"></div><figcaption><span class="fig-label">Tahoe Blue Event Center: 6 points</span><span class="fig-note">I originally clicked 8. Two of them were on the seats right in front of me, and since they were so close, the slightest movement of my phone shifted them more than everything else (parallax). Dropping them took the worst error from about 40 pixels down to 3.</span></figcaption></figure>
+      <figure class="wide-figure"><div class="plate"><img src="./images/hawaii_pts.jpg" alt="Hawaii correspondences"></div><figcaption><span class="fig-label">Koko Head: 8 points</span></figcaption></figure>
+    </div>
+
+    <div class="subsec">
+      <h3>2.3 &nbsp;Recovered Homography</h3>
+      <p class="sub-intro">Here is the H I recovered for the beach, in full resolution pixel coordinates. It goes from the left photo into the right photo, which is the direction the inverse warp needs.</p>
+      <pre class="matrix">H = ⎡  2.123    0.036   −3590.676 ⎤
+    ⎢  0.379    1.732    −786.079 ⎥
+    ⎣  0.00028  −0.000017    1.000 ⎦</pre>
+    </div>
+  </section>
+
+  <!-- ======================= A3 ======================= -->
+  <section class="writeup">
+    <div class="sec-head">
+      <span class="sec-num">3</span>
+      <h2>Warping the Images</h2>
+    </div>
+    <p class="sec-intro">The obvious way to warp an image is to take every pixel in the source and send it to its new spot. The problem is that when the image stretches, neighboring pixels land further apart, and you get holes. Inverse warping flips it around. For every pixel in the output, we ask where it came from in the source, send it back through H, and grab the color there. Every output pixel gets a value, so there are no holes. The catch is that the spot we land on is almost never a whole pixel, and the two warps differ only in how they handle that.</p>
+
+    <div class="subsec">
+      <h3>3.1 &nbsp;Sizing the Canvas</h3>
+      <p class="sub-intro">My first version made the output the same size as the input. This cut off anything that warped to negative coordinates, which in a mosaic is usually half the picture. To fix this, I send the source's 4 corners forward through the inverse of H (dividing by w) and take the box around them. That box is the canvas. Its top left corner is not at (0, 0) anymore, so I add that offset to every canvas pixel before sending it through H.</p>
+      <figure class="code-block">
+        <figcaption class="code-label">warpImageBilinear (core)</figcaption>
+        <pre><code class="language-python">coords = np.meshgrid(np.arange(bottom_right[0]), np.arange(bottom_right[1]))
+xs, ys = coords
+points = np.stack([xs.ravel() + top_left[0], ys.ravel() + top_left[1], np.ones(xs.size)])
+source = H @ points
+source_x = source[0] / source[2]
+source_y = source[1] / source[2]
+
+x0 = np.floor(source_x).astype(int)
+y0 = np.floor(source_y).astype(int)
+mask = (x0 >= 0) & (x0 + 1 < w) & (y0 >= 0) & (y0 + 1 < h) & (source[2] > 0)
+...
+dx, dy = (safe_x - x0)[:, None], (safe_y - y0)[:, None]
+canvas[cy, cx] = ((1-dx)*(1-dy)*im[y0, x0] + dx*(1-dy)*im[y0, x0+1]
+                  + (1-dx)*dy*im[y0+1, x0] + dx*dy*im[y0+1, x0+1])</code></pre>
+      </figure>
+      <p class="sub-intro">Nearest neighbor is the same function, except it rounds the source coordinates to the closest pixel and copies it. Bilinear takes the 4 pixels around the spot and averages them, weighted by how close each one is. Both work on any number of channels, so if I stack an alpha channel on as a 4th channel, it gets warped right along with the colors. This ends up being important for the blending in Section 4.</p>
+    </div>
+
+    <div class="subsec">
+      <h3>3.2 &nbsp;Rectification</h3>
+      <p class="sub-intro">A good way to test the warps is rectification. If I know something is a rectangle in real life, I can click its 4 corners and send them to the corners of an actual rectangle. If the warp works, the object should look like it is viewed straight on. I did this with the dock at Kiva Beach (sent to a long thin strip), and the video board at Tahoe Blue (sent to 16:9).</p>
+      <div class="figs">
+        <figure><div class="plate"><img src="./images/rect_dock_src.jpg" alt="Dock with corners marked"></div><figcaption><span class="fig-label">Dock, corners clicked</span></figcaption></figure>
+        <figure><div class="plate"><img src="./images/rect_dock_bilinear.jpg" alt="Dock rectified"></div><figcaption><span class="fig-label">Rectified, now from above</span><span class="fig-note">The sides of the dock are parallel and the planks are evenly spaced. The black at the bottom is outside of the original photo.</span></figcaption></figure>
+      </div>
+      <figure class="wide-figure"><div class="plate"><img src="./images/rect_board_src.jpg" alt="Arena with video board corners marked"></div><figcaption><span class="fig-label">Video board, corners clicked</span></figcaption></figure>
+      <figure class="wide-figure"><div class="plate"><img src="./images/rect_board_bilinear.jpg" alt="Video board rectified"></div><figcaption><span class="fig-label">Rectified, now head on</span><span class="fig-note">"BRYAN ADAMS" runs straight across now. The ceiling is not on the same plane as the board, so it stays warped.</span></figcaption></figure>
+    </div>
+
+    <div class="subsec">
+      <h3>3.3 &nbsp;Nearest Neighbor vs Bilinear</h3>
+      <p class="sub-intro">The video board gets blown up about 3x during rectification, which makes the difference easy to see. Nearest neighbor is on the left, bilinear on the right.</p>
+      <figure class="wide-figure"><div class="plate"><img src="./images/rect_board_zoom.jpg" alt="Nearest neighbor vs bilinear zoom on the video board"></div><figcaption><span class="fig-label">Video board, 4x zoom: nearest neighbor (left), bilinear (right)</span></figcaption></figure>
+      <figure class="wide-figure"><div class="plate"><img src="./images/rect_dock_zoom.jpg" alt="Nearest neighbor vs bilinear zoom on the dock"></div><figcaption><span class="fig-label">Dock, 4x zoom: nearest neighbor (left), bilinear (right)</span></figcaption></figure>
+      <table class="numbers">
+        <thead><tr><th>Warp</th><th>Dock (680 × 2380)</th><th>Video board (2176 × 1224)</th></tr></thead>
+        <tbody>
+          <tr><td>Nearest neighbor</td><td>0.07 s</td><td>0.09 s</td></tr>
+          <tr><td>Bilinear</td><td>0.15 s</td><td>0.30 s</td></tr>
+        </tbody>
+      </table>
+      <p class="sub-intro">Nearest neighbor gives jagged, staircase edges on the silhouette, since several output pixels in a row all copy the same source pixel. Bilinear blends them, so the edges stay smooth, but it is a little softer. It is also 2 to 3 times slower, since it reads 4 pixels and computes weights instead of reading 1. Both are fast enough to not matter here, so I used bilinear for everything else.</p>
+    </div>
+  </section>
+
+  <!-- ======================= A4 ======================= -->
+  <section class="writeup">
+    <div class="sec-head">
+      <span class="sec-num">4</span>
+      <h2>Blending into a Mosaic</h2>
+    </div>
+    <p class="sec-intro">For each pair, one photo stays fixed as the reference, and the other gets warped into its frame. My procedure:</p>
+    <div class="subsec">
+      <ol class="sub-intro">
+        <li><strong>Size the canvas.</strong> Take the box around both the warped photo and the reference photo, so nothing gets cut off.</li>
+        <li><strong>Add an alpha channel.</strong> Each photo gets a weight that is 1 at its center and falls off to 0 at its edges.</li>
+        <li><strong>Warp the photo onto the canvas</strong> with its alpha along for the ride, and paste the reference photo onto a canvas of the same size.</li>
+        <li><strong>Take the weighted average</strong> at every pixel: <code class="inline">(a1*rgb1 + a2*rgb2) / (a1 + a2)</code>.</li>
+      </ol>
+      <figure class="code-block">
+        <figcaption class="code-label">feather_alpha</figcaption>
+        <pre><code class="language-python">def feather_alpha(h, w):
+    x = np.arange(w)
+    y = np.arange(h)
+    dx = np.minimum(x, w - 1 - x) / ((w - 1) / 2)
+    dy = np.minimum(y, h - 1 - y) / ((h - 1) / 2)
+    return np.maximum(dy[:, None] * dx[None, :], 1e-3)</code></pre>
+      </figure>
+      <p class="sub-intro">The weight at each pixel is its distance to the nearest left or right edge, times its distance to the nearest top or bottom edge, both scaled to go from 0 to 1. The small floor at the end keeps the very edge of each photo from going black. My first attempt just laid one photo over the other at 50%. Everywhere only one photo covers, it got averaged with the black background, so those parts came out half as bright. Dividing by <code class="inline">a1 + a2</code> fixes this, since a photo by itself just gets divided by its own weight.</p>
+    </div>
+
+    <div class="subsec">
+      <h3>4.1 &nbsp;Kiva Beach, South Lake Tahoe</h3>
+      <figure class="wide-figure"><div class="plate"><img src="./images/beach_mosaic.jpg" alt="Lake Tahoe mosaic"></div><figcaption><span class="fig-label">Feathered mosaic</span><span class="fig-note">The trees, shoreline, and mountains all carry straight across.</span></figcaption></figure>
+      <figure class="wide-figure"><div class="plate"><img src="./images/beach_mosaic_hard.jpg" alt="Lake Tahoe mosaic without feathering"></div><figcaption><span class="fig-label">Same mosaic with 0/1 alpha (no feathering)</span><span class="fig-note">With equal weights, the overlap is a flat 50/50 average, and right at its edge it jumps to a single photo. The two shots have slightly different exposure, so you can see a box in the sky and water. Feathering fades between them instead, and the box disappears.</span></figcaption></figure>
+    </div>
+
+    <div class="subsec">
+      <h3>4.2 &nbsp;Tahoe Blue Event Center</h3>
+      <figure class="wide-figure"><div class="plate"><img src="./images/rink_mosaic.jpg" alt="Hockey arena mosaic"></div><figcaption><span class="fig-label">Feathered mosaic</span><span class="fig-note">The rink, blue lines, and far stands all line up. The fan shape on the right is the warped photo stretching out, which happens more the further you turn away from the reference. The seats right in front of me still ghost a little, from the same parallax that made me drop those two points.</span></figcaption></figure>
+      <figure class="wide-figure"><div class="plate"><img src="./images/rink_mosaic_hard.jpg" alt="Hockey arena mosaic without feathering"></div><figcaption><span class="fig-label">Same mosaic with 0/1 alpha</span></figcaption></figure>
+    </div>
+
+    <div class="subsec">
+      <h3>4.3 &nbsp;Koko Head, Hawaii</h3>
+      <figure class="wide-figure" style="max-width:640px"><div class="plate"><img src="./images/hawaii_mosaic.jpg" alt="Hawaii mosaic"></div><figcaption><span class="fig-label">Feathered mosaic</span><span class="fig-note">The coastline and ridge match up. Part of the left photo ends up behind the reference camera, so its far edge stretches out toward infinity. I capped the canvas at one photo width past the reference on each side, and the negative w mask throws out the rest.</span></figcaption></figure>
+    </div>
+
+  </section>
+
+</main>
+
+<footer class="sitefoot">
+  <span>© 2026 Ellis O'Dowd</span>
+  <span>UC Berkeley CS180</span>
+</footer>
+
+</body>
+</html>
