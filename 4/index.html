@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Project 4 — Image Warping and Mosaicing</title>
+<title>Project 4 — Image Warping and Mosaicing, Autostitching</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Source+Serif+4:opsz,wght@8..60,400;8..60,600;8..60,700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
@@ -210,6 +210,161 @@ canvas[cy, cx] = ((1-dx)*(1-dy)*im[y0, x0] + dx*(1-dy)*im[y0, x0+1]
       <figure class="wide-figure" style="max-width:640px"><div class="plate"><img src="./images/hawaii_mosaic.jpg" alt="Hawaii mosaic"></div><figcaption><span class="fig-label">Feathered mosaic</span><span class="fig-note">The coastline and ridge match up. Part of the left photo ends up behind the reference camera, so its far edge stretches out toward infinity. I capped the canvas at one photo width past the reference on each side, and the negative w mask throws out the rest.</span></figcaption></figure>
     </div>
 
+  </section>
+
+  <div class="part-banner"><span>Part B · Feature Matching for Autostitching</span></div>
+
+  <!-- ======================= B1 ======================= -->
+  <section class="writeup">
+    <div class="sec-head">
+      <span class="sec-num">1</span>
+      <h2>Finding Corners</h2>
+    </div>
+    <p class="sec-intro">Clicking correspondences by hand was the slowest part of Part A, and it was easy to get wrong. In Part B the computer finds them, following the MOPS paper (Brown, Szeliski and Winder). The first step is finding points that will be easy to find again in the other photo. Corners are good for this, since they move in a way you can see whichever direction you shift them, while a flat patch of sky or a straight edge does not.</p>
+
+    <div class="subsec">
+      <h3>1.1 &nbsp;Harris Corners</h3>
+      <p class="sub-intro">I used the provided Harris detector, single scale. Every pixel gets a corner strength, and every local maximum of that strength counts as a corner. Before anything else I shrink the photos to a quarter size. At full resolution a single photo gave almost 300,000 corners. A quarter of the size, plus throwing out any corner weaker than 1% of the strongest, brings that down to a few thousand. The detector also drops anything within 20 pixels of the edge, since the descriptors in Section 2 need a 40x40 window around each corner.</p>
+    </div>
+
+    <div class="subsec">
+      <h3>1.2 &nbsp;Adaptive Non-Maximal Suppression</h3>
+      <p class="sub-intro">Thousands of corners is still too many to match, but just keeping the strongest 500 bunches them up in the busiest parts of the image. ANMS spreads them out. For every corner I find the distance to the nearest corner that is clearly stronger than it (by at least about 10%, so <code class="inline">f_i &lt; 0.9 f_j</code>). That distance is its suppression radius. A corner with a big radius is the best thing in a big area, so I keep the 500 with the biggest radii. The strongest corner overall has nothing stronger, so its radius is infinite and it always makes it.</p>
+      <figure class="code-block">
+        <figcaption class="code-label">anms</figcaption>
+        <pre><code class="language-python">def anms(h, coords, n=500, threshold=0.9):
+    strength = h[coords[0], coords[1]]
+    num_corners = coords.shape[1]
+    r = np.empty(num_corners)
+    for i in range(num_corners):
+        corner = coords.T[i:i+1, :]
+        distances_from = dist2(corner, coords.T)
+        validity = strength*threshold > strength[i]
+        valid_distances = distances_from[:, validity]
+        r[i] = np.min(valid_distances, initial=np.inf)
+    indices = np.argsort(r)[::-1][:n]
+    return coords[:, indices]</code></pre>
+      </figure>
+      <p class="sub-intro">I loop over the corners one at a time, and only compute one row of distances per corner. Doing the whole N x N distance matrix at once was too much memory at first. With all the full resolution corners, it would have been over 600 GB.</p>
+      <figure class="wide-figure"><div class="plate"><img src="./images/b_harris_anms.jpg" alt="Harris corners before and after ANMS"></div><figcaption><span class="fig-label">Kiva Beach: all Harris corners (left) and the 500 kept by ANMS (right)</span><span class="fig-note">Before ANMS there are corners everywhere on the water. After, they are spread over the whole image, including the trees and mountains.</span></figcaption></figure>
+    </div>
+  </section>
+
+  <!-- ======================= B2 ======================= -->
+  <section class="writeup">
+    <div class="sec-head">
+      <span class="sec-num">2</span>
+      <h2>Feature Descriptors</h2>
+    </div>
+    <p class="sec-intro">To match a corner, we need a description of what the area around it looks like. For each corner I take the 40x40 window around it and sample every 5th pixel, which gives an 8x8 patch. Harris corners are usually off by a pixel or two, and a coarse sample of a big area barely changes when you shift it a little. Taking every 5th pixel straight away would alias, so I blur the image first with a Gaussian (σ = 2, the standard anti-aliasing σ for downsampling by 5). Then each patch is normalized to mean 0 and standard deviation 1. A brighter or higher contrast copy of the same patch then comes out to the exact same 64 numbers, which matters because my two shots never have exactly the same exposure.</p>
+    <div class="subsec">
+      <figure class="code-block">
+        <figcaption class="code-label">feature_descriptor</figcaption>
+        <pre><code class="language-python">def feature_descriptor(corners, im):
+    blurred = cv.GaussianBlur(im, (0, 0), sigmaX=2)
+    num_corners = corners.shape[1]
+    results = np.zeros((num_corners, 64))
+    i = 0
+    for y, x in corners.T:
+        samples = blurred[y-20:y+20:5, x-20:x+20:5]
+        patch = samples.flatten()
+        patch = (patch - np.mean(patch)) / (np.std(patch) + 1e-8)
+        results[i] = patch
+        i += 1
+    return results</code></pre>
+      </figure>
+      <figure class="wide-figure"><div class="plate"><img src="./images/b_features.jpg" alt="Extracted feature descriptors"></div><figcaption><span class="fig-label">Kiva Beach: the first 6 corners from ANMS, with their 40x40 windows (top) and normalized 8x8 descriptors (bottom)</span><span class="fig-note">Since every descriptor is normalized, a dark window comes out with the same full contrast as a bright one.</span></figcaption></figure>
+    </div>
+  </section>
+
+  <!-- ======================= B3 ======================= -->
+  <section class="writeup">
+    <div class="sec-head">
+      <span class="sec-num">3</span>
+      <h2>Feature Matching</h2>
+    </div>
+    <p class="sec-intro">Each descriptor is a point in 64 dimensions, so the best match for a feature in one photo is the closest descriptor in the other photo. The problem is that the closest match is not always right. On the water, every ripple looks like every other ripple, so a feature can have a very close match that is wrong. The paper shows that the distance to the best match is not a good test on its own (Figure 6a), but comparing it to the second best match is (Figure 6b). The second best match is almost always wrong, so it tells us how close a wrong match gets for this feature. If the best match is a lot better than that, it is probably right. If they are about the same, the feature is ambiguous, and I throw it out.</p>
+    <div class="subsec">
+      <p class="sub-intro">I keep a match when the ratio of squared distances <code class="inline">1-NN / 2-NN</code> is under 0.7. In Figure 6b, the correct matches are mostly well under that and the incorrect matches mostly sit above it.</p>
+      <figure class="code-block">
+        <figcaption class="code-label">match_features</figcaption>
+        <pre><code class="language-python">def match_features(features1, features2, threshold=0.7):
+    distances = dist2(features1, features2)
+    best = []
+    for i in range(features1.shape[0]):
+        row = distances[i]
+        indices = np.argsort(row)
+        nn1, nn2 = indices[0], indices[1]
+        if row[nn1]/row[nn2] &lt; threshold:
+            best.append((i, nn1))
+    return best</code></pre>
+      </figure>
+      <figure class="wide-figure"><div class="plate"><img src="./images/b_beach_matches.jpg" alt="Kiva Beach matches"></div><figcaption><span class="fig-label">Kiva Beach: 72 matches out of 500 features</span><span class="fig-note">Most lines are parallel, which is what you expect for correct matches. The few that cross at steeper angles are wrong, and Section 4 removes them.</span></figcaption></figure>
+      <figure class="wide-figure"><div class="plate"><img src="./images/b_rink_matches.jpg" alt="Tahoe Blue Event Center matches"></div><figcaption><span class="fig-label">Tahoe Blue Event Center: 120 matches</span><span class="fig-note">The ceiling trusses have lots of sharp corners, so most of the matches are up there.</span></figcaption></figure>
+    </div>
+  </section>
+
+  <!-- ======================= B4 ======================= -->
+  <section class="writeup">
+    <div class="sec-head">
+      <span class="sec-num">4</span>
+      <h2>RANSAC and Automatic Mosaics</h2>
+    </div>
+    <p class="sec-intro">The ratio test removes most of the wrong matches, but not all of them, and my <code class="inline">computeH</code> from Part A uses least squares, which trusts every point the same. One bad match pulls H off, and a few ruin it. RANSAC finds the largest group of matches that all agree on one homography:</p>
+    <div class="subsec">
+      <ol class="sub-intro">
+        <li><strong>Pick 4 matches at random</strong> and compute the exact H for them.</li>
+        <li><strong>Send every point through H</strong> (dividing by w) and see how far each one lands from its match. The ones within 2 pixels are inliers.</li>
+        <li><strong>Keep the H with the most inliers</strong> over 1000 tries.</li>
+        <li><strong>Refit</strong> with least squares on just those inliers.</li>
+      </ol>
+      <p class="sub-intro">If any of the 4 random matches is wrong, the H it gives is junk and almost nothing agrees with it. When all 4 happen to be right, every other correct match agrees with it too. It only needs to get lucky once in 1000 tries. The inliers are found on the quarter size photos, so I multiply them by 4 and pass them to my Part A <code class="inline">create_mosaic</code>, exactly the way I passed it my clicked points.</p>
+      <figure class="code-block">
+        <figcaption class="code-label">ransac</figcaption>
+        <pre><code class="language-python">def ransac(pts1, pts2, num_iters=1000, eps=2):
+    num_matches = pts1.shape[0]
+    pts1_h = np.hstack([pts1, np.ones((num_matches, 1))])
+    best_inliers = np.zeros(num_matches, dtype=bool)
+    for _ in range(num_iters):
+        sample = np.random.choice(num_matches, 4, replace=False)
+        H = computeH(pts1[sample], pts2[sample])
+        projected = H @ pts1_h.T
+        projected = (projected[:2] / projected[2]).T
+        errors = np.linalg.norm(projected - pts2, axis=1)
+        inliers = errors &lt; eps
+        if inliers.sum() &gt; best_inliers.sum():
+            best_inliers = inliers
+    return pts1[best_inliers], pts2[best_inliers]</code></pre>
+      </figure>
+    </div>
+
+    <div class="subsec">
+      <h3>4.1 &nbsp;Kiva Beach, South Lake Tahoe</h3>
+      <figure class="wide-figure"><div class="plate"><img src="./images/b_beach_inliers.jpg" alt="Kiva Beach RANSAC inliers"></div><figcaption><span class="fig-label">29 of 72 matches survive RANSAC</span></figcaption></figure>
+      <figure class="wide-figure"><div class="plate"><img src="./images/beach_mosaic.jpg" alt="Kiva Beach manual mosaic"></div><figcaption><span class="fig-label">Manual (Part A)</span></figcaption></figure>
+      <figure class="wide-figure"><div class="plate"><img src="./images/b_beach_auto.jpg" alt="Kiva Beach automatic mosaic"></div><figcaption><span class="fig-label">Automatic</span><span class="fig-note">Basically the same as the manual one. The trees, shoreline, and mountains all line up with no ghosting.</span></figcaption></figure>
+    </div>
+
+    <div class="subsec">
+      <h3>4.2 &nbsp;Tahoe Blue Event Center</h3>
+      <figure class="wide-figure"><div class="plate"><img src="./images/b_rink_inliers.jpg" alt="Tahoe Blue RANSAC inliers"></div><figcaption><span class="fig-label">52 of 120 matches survive RANSAC</span></figcaption></figure>
+      <figure class="wide-figure"><div class="plate"><img src="./images/rink_mosaic.jpg" alt="Tahoe Blue manual mosaic"></div><figcaption><span class="fig-label">Manual (Part A)</span></figcaption></figure>
+      <figure class="wide-figure"><div class="plate"><img src="./images/b_rink_auto.jpg" alt="Tahoe Blue automatic mosaic"></div><figcaption><span class="fig-label">Automatic</span><span class="fig-note">The far side of the arena lines up, and the automatic H agrees with my clicked points to within a few pixels. But every inlier is in the top 70% of the frame, on the ceiling, boards, and ice. Nothing pins down the seats right in front of me, so the bottom of the warped photo stretches out much further than in my manual version. My manual points were spread lower in the frame, which held that part in place.</span></figcaption></figure>
+    </div>
+
+    <div class="subsec">
+      <h3>4.3 &nbsp;Costa Rica</h3>
+      <figure class="wide-figure"><div class="plate"><img src="./images/b_cr_src.jpg" alt="Costa Rica source pair"></div><figcaption><span class="fig-label">Source pair</span></figcaption></figure>
+      <div class="figs">
+        <figure><div class="plate"><img src="./images/b_cr_manual.jpg" alt="Costa Rica manual mosaic"></div><figcaption><span class="fig-label">Manual</span></figcaption></figure>
+        <figure><div class="plate"><img src="./images/b_cr_auto.jpg" alt="Costa Rica automatic mosaic"></div><figcaption><span class="fig-label">Automatic (31 of 58 matches kept)</span><span class="fig-note">The skyline and mountains line up in both.</span></figcaption></figure>
+      </div>
+    </div>
+
+    <div class="subsec">
+      <h3>4.4 &nbsp;Where It Failed: Koko Head</h3>
+      <figure class="wide-figure"><div class="plate"><img src="./images/b_hawaii_inliers.jpg" alt="Koko Head RANSAC inliers"></div><figcaption><span class="fig-label">Only 8 of 27 matches survive, all in one thin band</span><span class="fig-note">These two photos only overlap in a narrow strip, and most of that strip is bushes, which all look alike. The matches that make it are squeezed into one horizontal line along the horizon. Four points in a line do not pin down a homography, so RANSAC settles on an H that fits that band but throws the rest of the photo off into the distance. My manual mosaic worked because I clicked points that were spread out on purpose, which is something this pipeline can not do when the overlap is this small.</span></figcaption></figure>
+    </div>
   </section>
 
 </main>
